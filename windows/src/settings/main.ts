@@ -171,6 +171,22 @@ function claudeSection(status: HookStatus): HTMLElement {
   return section;
 }
 
+function codexSection(): HTMLElement {
+  const binary = h("input", {placeholder:"Absolute path to official codex.exe"}) as HTMLInputElement;
+  const cwd = h("input", {placeholder:"Absolute project folder"}) as HTMLInputElement;
+  const prompt = h("input", {placeholder:"Task for Codex"}) as HTMLInputElement;
+  const feedback = h("div", {});
+  const start = h("button", {text:"Start Codex"});
+  start.addEventListener("click", async () => {
+    try { await Bridge.codexStart(binary.value,cwd.value,prompt.value); feedback.textContent="Codex started. Watch the island."; }
+    catch { feedback.textContent="Codex could not start. Check executable, project folder and codex login."; }
+  });
+  const stop = h("button", {text:"Stop Codex",onclick:() => void Bridge.codexStop()});
+  return h("section", {}, h("h2", {text:"Codex Integration (optional)"}),
+    h("div", {class:"hint",text:"Sign in with codex login in your terminal first. Starts a dedicated read-only sandbox session. Official approvals appear in the island."}),
+    binary,cwd,prompt,h("div", {class:"row"},start,stop),feedback);
+}
+
 function providerSection(): HTMLElement {
   const select = h("select", {}) as HTMLSelectElement;
   for (const id of ["anthropic", "openai", "auto"] as const) select.append(h("option", {value:id,text:id === "auto" ? "Auto (Anthropic first)" : id}));
@@ -468,6 +484,7 @@ async function main() {
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     claudeSection(status),
     providerSection(),
+    codexSection(),
     apiSection(hasKey),
     apiSection(hasOpenAIKey, "openai"),
     integrationsSection(present),

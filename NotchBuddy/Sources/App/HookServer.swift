@@ -129,6 +129,7 @@ final class HookServer: @unchecked Sendable {
             return
         }
 
+        state.lastAgentEvent = ClaudeCodeAdapter.event(name, session: sessionId, tool: payload["tool_name"] as? String ?? "")
         let focused = state.focusId == "integration_claude"
 
         switch name {
@@ -157,7 +158,7 @@ final class HookServer: @unchecked Sendable {
             let input = payload["tool_input"] as? [String: Any] ?? [:]
             let step = frenchStep(tool: tool, input: input)
             appendStep(id: "integration_claude", step: step)
-            nbLog("PreToolUse \(step)")
+            nbLog("PreToolUse")
 
         case "PostToolUse":
             state.updateTask(id: "integration_claude", state: .working)
@@ -268,7 +269,7 @@ final class HookServer: @unchecked Sendable {
         if let input = payload["tool_input"] as? [String: Any] {
             command = input["command"] as? String ?? tool
         }
-        nbLog("PermissionRequest \(tool): \(command)")
+        nbLog("PermissionRequest")
 
         if pendingApprovalFD >= 0 {
             let old = pendingApprovalFD
@@ -283,6 +284,7 @@ final class HookServer: @unchecked Sendable {
 
         upsertTask(projectName: projectName, cwd: cwd)
         state.updateTask(id: "integration_claude", state: .approval)
+        state.lastAgentEvent = ClaudeCodeAdapter.event("PermissionRequest", session: sessionId, tool: tool)
         state.pendingApproval = ApprovalInfo(sessionId: sessionId, tool: tool, command: command)
         state.isPinned = true
         SoundEngine.shared.play("approval")

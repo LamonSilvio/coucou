@@ -1,5 +1,6 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
+mod codex;
 mod ai;
 mod openai;
 mod claude;
@@ -241,6 +242,17 @@ fn approval_decline(app: AppHandle, request_id: String) {
     pipe::decline(&app, &request_id);
 }
 
+#[tauri::command]
+fn codex_start(app: AppHandle, codex: State<codex::Codex>, binary: String, cwd: String, prompt: String) -> Result<(),String> {
+    codex.start(app,binary,cwd,prompt)
+}
+#[tauri::command]
+fn codex_stop(app: AppHandle, codex: State<codex::Codex>) { codex.close(&app,None); }
+#[tauri::command]
+fn codex_decide(app: AppHandle, codex: State<codex::Codex>, request_id: String, allow: bool) -> Result<(),String> {
+    codex.decide(&app,&request_id,allow)
+}
+
 // ── Chat, files and secrets ───────────────────────────────────────────────────
 
 /// One chat turn. The API key and any file bytes stay on the Rust side.
@@ -383,6 +395,7 @@ pub fn run() {
         })
         .manage(Pending::default())
         .manage(Chat::default())
+        .manage(codex::Codex::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -400,6 +413,7 @@ pub fn run() {
             approval_ack,
             approval_decline,
             log_line,
+            codex_start, codex_stop, codex_decide,
             chat_send,
             chat_reset,
             ingest_file,

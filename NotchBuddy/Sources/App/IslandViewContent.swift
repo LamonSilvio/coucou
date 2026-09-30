@@ -59,7 +59,7 @@ struct OverviewView: View {
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                                     .layoutPriority(1)
-                                Text(agent.source == .claudeCode ? "Claude Code" : "n8n")
+                                Text(agent.source == .codex ? "Codex" : agent.source == .claudeCode ? "Claude Code" : "n8n")
                                     .font(.system(size: 11))
                                     .foregroundColor(Color(hex: "#8E939C"))
                                     .lineLimit(1)
@@ -199,16 +199,18 @@ struct ApprovalView: View {
             CardBackground(wash: .amber)
             VStack(alignment: .leading, spacing: 5) {
                 AgentWho(task: state.focusTask, label: "needs permission")
-                CodeBlock(text: approval?.command ?? approval?.tool ?? "…")
+                if approval?.provider == "codex" {
+                    ScrollView { Text(approval?.command ?? "…").font(.system(size: 11, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 55)
+                } else { CodeBlock(text: approval?.command ?? approval?.tool ?? "…") }
                 HStack(spacing: 8) {
                     SecondaryButton("Deny") {
-                        HookServer.shared.sendApprovalDecision("deny")
+                        decide("deny")
                     }
                     PrimaryButton("Allow") {
-                        HookServer.shared.sendApprovalDecision("allow")
+                        decide("allow")
                     }
-                    SecondaryButton("Always") {
-                        HookServer.shared.sendApprovalDecision("always")
+                    if approval?.provider != "codex" {
+                        SecondaryButton("Always") { HookServer.shared.sendApprovalDecision("always") }
                     }
                 }
             }
@@ -218,6 +220,12 @@ struct ApprovalView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+    private func decide(_ decision: String) {
+        if let approval, approval.provider == "codex" {
+            CodexAdapter.shared.decide(decision, requestID: approval.requestID)
+        } else { HookServer.shared.sendApprovalDecision(decision) }
+    }
+
 }
 
 // MARK: - Question

@@ -3,7 +3,7 @@
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 
-export type AgentSource = "claudeCode" | "n8n";
+export type AgentSource = "claudeCode" | "codex" | "n8n";
 export type PillBadge = "approval" | "finished" | "error";
 
 export interface AgentTask {
@@ -22,6 +22,7 @@ export interface AgentTask {
 }
 
 export interface ApprovalInfo {
+  provider?: "claudeCode" | "codex";
   requestId: string;
   sessionId: string;
   tool: string;
@@ -142,6 +143,7 @@ class AppState {
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
+  lastAgentEvent: import("./agent-events").AgentEvent | null = null;
 
   integrations: Record<string, IntegrationInfo> = {};
 

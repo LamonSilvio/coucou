@@ -112,6 +112,7 @@ export class Island {
         Sound.play("blip");
       },
       openTerminal: () => {
+        if (State.focusTask?.source === "codex") return;
         const cwd = State.focusTask?.sessionCwd ?? null;
         void Bridge.openInVSCode(cwd);
       },
@@ -139,12 +140,14 @@ export class Island {
         void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
         if (!req) return;
         Sound.play(d === "deny" ? "blip" : "approve");
-        void Bridge.approvalDecision(req.requestId, d);
+        if (req.provider === "codex") void Bridge.codexDecide(req.requestId, d === "allow").catch(() => {});
+        else void Bridge.approvalDecision(req.requestId, d);
         State.pendingApproval = null;
         State.isPinned = false;
         this.fsm.pinned = false;
-        State.updateTask("integration_claude", "working");
-        State.setPillBadge("integration_claude", null);
+        const id = req.provider === "codex" ? "integration_codex" : "integration_claude";
+        State.updateTask(id, "working");
+        State.setPillBadge(id, null);
         this.setView(State.defaultView());
       },
       toggleSound: () => {

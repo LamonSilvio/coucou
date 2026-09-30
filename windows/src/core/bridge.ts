@@ -78,6 +78,10 @@ export const Bridge = {
   /** "Nobody can act on this" — Claude Code asks in the terminal right away. */
   approvalDecline: (requestId: string) => call<void>("approval_decline", { requestId }),
 
+  codexStart: (binary: string, cwd: string, prompt: string) => callOrThrow<void>("codex_start", {binary,cwd,prompt}),
+  codexStop: () => call<void>("codex_stop"),
+  codexDecide: (requestId: string, allow: boolean) => callOrThrow<void>("codex_decide", {requestId,allow}),
+
   // ── Chat, files, secrets ──────────────────────────────────────────────────
   /** One chat turn. The API key and any file bytes never leave Rust. */
   chatSend: (query: string, context: ChatContext | null) =>

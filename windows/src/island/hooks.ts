@@ -3,6 +3,7 @@
 // Difference from macOS: no terminal filter. On Windows the hook fires from any
 // terminal (Windows Terminal, VS Code, PowerShell…) and all of them are handled.
 
+import { claudeEvent } from "../core/agent-events";
 import { Bridge, onEvent } from "../core/bridge";
 import { Sound } from "../core/sound";
 import { State } from "../core/state";
@@ -131,6 +132,9 @@ function handleHook(island: Island, payload: HookPayload) {
   }
 
   const name = payload.hook_event_name ?? "";
+  const event = claudeEvent(name,payload.session_id ?? "",payload.tool_name ?? "");
+  // Keep the legacy presentation/relay semantics while publishing the common event.
+  if (event) State.lastAgentEvent = event;
   const cwd = payload.cwd ?? "";
   const raw = lastPathComponent(cwd);
   const projectName = aliasProjectName(raw || "Session");

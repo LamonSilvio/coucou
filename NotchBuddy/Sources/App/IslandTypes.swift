@@ -34,6 +34,8 @@ struct ApprovalInfo: Sendable {
     var sessionId: String
     var tool: String
     var command: String
+    var provider: String = "claudeCode"
+    var requestID: String = ""
 }
 
 // MARK: - Pill badge (shown on pill edge when non-focused task has an alert)
@@ -59,6 +61,7 @@ struct AgentTask: Identifiable, Equatable {
 
 enum AgentSource: Equatable {
     case claudeCode
+    case codex
     case n8n
 }
 

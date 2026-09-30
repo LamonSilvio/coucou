@@ -21,6 +21,9 @@ struct SettingsView: View {
     @AppStorage("openaiWebSearch") private var openaiWebSearch = false
     @AppStorage("openaiCodeInterpreter") private var openaiCodeInterpreter = false
     @State private var openaiKey = ""
+    @AppStorage("codexBinary") private var codexBinary = ""
+    @State private var codexWorkspace = ""
+    @State private var codexPrompt = ""
 
     // Integration keys
     @State private var resendKey: String    = KeychainStore.shared.get("resend-api-key")  ?? ""
@@ -104,6 +107,19 @@ struct SettingsView: View {
                         .buttonStyle(.borderedProminent)
                     }
                     .padding(6)
+                }
+
+                GroupBox("Codex Integration (optional)") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Absolute path to official codex executable", text: $codexBinary)
+                        TextField("Absolute project folder", text: $codexWorkspace)
+                        TextField("Task for Codex", text: $codexPrompt)
+                        Text("Sign in with codex login in your terminal first. Starts a dedicated read-only sandbox session. Commands and edits requiring approval appear in the island.").font(.caption)
+                        HStack {
+                            Button("Start Codex") { CodexAdapter.shared.start(binary: codexBinary, cwd: codexWorkspace, prompt: codexPrompt) }
+                            Button("Stop Codex") { CodexAdapter.shared.stop() }
+                        }
+                    }.padding(6)
                 }
 
                 // MARK: Hooks

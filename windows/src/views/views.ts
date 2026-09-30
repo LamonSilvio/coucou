@@ -188,7 +188,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         who.append(
           dot(task.color, 7),
           h("span", { class: "name", text: task.name }),
-          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : "n8n" }),
+          h("span", { class: "tool", text: task.source === "codex" ? "Codex" : task.source === "claudeCode" ? "Claude Code" : "n8n" }),
         );
         if (task.steps.length > 1) {
           who.append(h("span", {
@@ -302,6 +302,10 @@ function buildApproval(actions: ViewActions): ViewHost {
       // The whole point of approving here rather than in the terminal: this line
       // is the command, the file path or the URL being authorised, not just the
       // name of the tool asking.
+      const codex = State.pendingApproval?.provider === "codex";
+      code.style.whiteSpace = codex ? "pre-wrap" : "";
+      code.style.maxHeight = codex ? "65px" : "";
+      code.style.overflow = codex ? "auto" : "";
       code.textContent = State.pendingApproval?.command || State.pendingApproval?.tool || "…";
       // Two buttons, built once. Rebuilding them between a mouse-down and a
       // mouse-up would swallow the click, and there is nothing left to vary:
@@ -374,7 +378,7 @@ function buildFinished(actions: ViewActions): ViewHost {
     el,
     sync() {
       clear(who);
-      who.append(agentWho(State.focusTask, "Claude Code finished"));
+      who.append(agentWho(State.focusTask, State.focusTask?.source === "codex" ? "Codex finished" : "Claude Code finished"));
       title.textContent = State.focusTask?.steps.at(-1) ?? "Session finished";
     },
   };

@@ -175,6 +175,7 @@ final class AppState: ObservableObject {
     @Published var notionError: String? = nil
 
     // Chat conversation history
+    @Published var lastAgentEvent: AgentEvent? = nil
     @Published var activeAITool: String? = nil
     @Published var chatHistory: [ChatMessage] = []
 

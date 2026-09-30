@@ -220,7 +220,10 @@ final class OpenAIService: AIProvider {
         let mime = ["pdf": "application/pdf", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif",
             "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xls": "application/vnd.ms-excel", "doc": "application/msword", "ppt": "application/vnd.ms-powerpoint", "rtf": "application/rtf", "odt": "application/vnd.oasis.opendocument.text"][ext]
-        let data = try Data(contentsOf: url)
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let data = try handle.read(upToCount: 20_000_001) ?? Data()
+        guard data.count <= 20_000_000 else { throw OpenAIError.message("File too large (20 MB limit).") }
         if let mime {
             let uri = "data:\(mime);base64,\(data.base64EncodedString())"
             if mime.hasPrefix("image/") {

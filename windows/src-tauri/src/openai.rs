@@ -209,7 +209,11 @@ pub fn file_block(path: &str, name: &str, vision: bool) -> Result<Value, String>
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xls" => "application/vnd.ms-excel", "doc" => "application/msword", "ppt" => "application/vnd.ms-powerpoint", "rtf" => "application/rtf", "odt" => "application/vnd.oasis.opendocument.text", _ => "",
     };
-    let bytes = std::fs::read(path).map_err(|_| "Could not read file.")?;
+    use std::io::Read;
+    let file = std::fs::File::open(path).map_err(|_| "Could not read file.")?;
+    let mut bytes = Vec::new();
+    file.take(20_000_001).read_to_end(&mut bytes).map_err(|_| "Could not read file.")?;
+    if bytes.len() > 20_000_000 { return Err("File too large (20 MB limit).".into()); }
     if mime.is_empty() {
         if bytes.len() > 200_000 { return Err("Text exceeds 200 KB. Use PDF or Office input.".into()); }
         let text = String::from_utf8(bytes).map_err(|_| "Unsupported file type.")?;

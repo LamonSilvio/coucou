@@ -12,7 +12,7 @@ pub struct AgentEvent {
 }
 
 struct Session {
-    child: Child, stdin: ChildStdin, generation: u64, cwd: String, prompt: String,
+    child: Child, stdin: ChildStdin, generation: u64, cwd: String, prompt: String, ready: bool,
     thread: Option<String>, turn: Option<String>, approvals: HashMap<String,Value>, proposals: HashMap<String,String>,
 }
 #[derive(Default)]
@@ -31,9 +31,21 @@ impl Codex {
         let stdout = child.stdout.take().ok_or("Codex stdout unavailable.")?;
         let stdin = child.stdin.take().ok_or("Codex stdin unavailable.")?;
         let generation = self.generation.fetch_add(1,std::sync::atomic::Ordering::SeqCst) + 1;
-        let mut session = Session {child, stdin, generation, cwd, prompt, thread:None, turn:None, approvals:HashMap::new(),proposals:HashMap::new()};
+        let mut session = Session {child, stdin, generation, cwd, prompt, ready:false, thread:None, turn:None, approvals:HashMap::new(),proposals:HashMap::new()};
         send(&mut session,json!({"id":1,"method":"initialize","params":{"clientInfo":{"name":"coucou","title":"Coucou","version":"0.1.1"}}}))?;
         *guard = Some(session); drop(guard);
+        let startup_app = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            let codex = startup_app.state::<Codex>();
+            let expired = {
+                let guard = codex.session.lock().unwrap();
+                if let Some(s) = guard.as_ref().filter(|s| s.generation == generation && !s.ready) {
+                    emit(&startup_app,s,"agentFailed","Codex initialization timed out. Check installation and authentication.".into(),None); true
+                } else { false }
+            };
+            if expired { codex.close(&startup_app,Some(generation)); }
+        });
         std::thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             loop {
@@ -89,7 +101,7 @@ impl Codex {
                         let _ = send(s,body);
                     }
                 }
-                Some(3) => { s.turn = m["result"]["turn"]["id"].as_str().map(str::to_owned); }
+                Some(3) => { s.turn = m["result"]["turn"]["id"].as_str().map(str::to_owned); s.ready = s.turn.is_some(); }
                 _ => {},
             }
             return;
@@ -97,7 +109,7 @@ impl Codex {
         let method = m["method"].as_str().unwrap_or(""); let p = &m["params"];
         if p["threadId"].as_str().is_some_and(|id| Some(id) != s.thread.as_deref()) { return }
         match method {
-            "turn/started" => { s.turn = p["turn"]["id"].as_str().map(str::to_owned); emit(app,s,"statusChanged","Codex working".into(),None); }
+            "turn/started" => { s.turn = p["turn"]["id"].as_str().map(str::to_owned); s.ready = s.turn.is_some(); emit(app,s,"statusChanged","Codex working".into(),None); }
             "turn/completed" => {
                 emit(app,s,if p["turn"]["status"] == "failed" {"agentFailed"} else {"agentCompleted"},format!("Codex turn {}",p["turn"]["status"].as_str().unwrap_or("ended")),None);
                 s.approvals.clear(); s.turn = None;

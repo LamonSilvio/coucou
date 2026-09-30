@@ -7,6 +7,7 @@ final class CodexAdapter {
     private var process: Process?
     private var input: FileHandle?
     private var buffer = Data()
+    private var generation = UUID()
     private var sequence = 0
     private var callbacks: [Int: (Result<[String: Any], Error>) -> Void] = [:]
     private var approvals: [String: Any] = [:]
@@ -25,6 +26,8 @@ final class CodexAdapter {
               cwd.hasPrefix("/"), !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             fail("Choose an absolute Codex executable, project folder and prompt in Settings."); return
         }
+        generation = UUID()
+        let currentGeneration = generation
         workspace = cwd; initialPrompt = prompt
         let proc = Process(); let stdin = Pipe(); let stdout = Pipe()
         proc.executableURL = URL(fileURLWithPath: binary)
@@ -36,7 +39,8 @@ final class CodexAdapter {
             let data = handle.availableData
             if data.isEmpty { handle.readabilityHandler = nil }
             Task { @MainActor in
-                if data.isEmpty { self?.stop() } else { self?.receive(data) }
+                guard let self, self.generation == currentGeneration else { return }
+                if data.isEmpty { self.stop() } else { self.receive(data) }
             }
         }
         do {
@@ -62,6 +66,7 @@ final class CodexAdapter {
     }
 
     func stop() {
+        generation = UUID()
         approvals.removeAll(); callbacks.removeAll(); proposals.removeAll()
         process?.terminate(); process = nil; input = nil; buffer = Data()
         if threadID != nil { emit(.sessionEnded, "Codex stopped") }
@@ -82,8 +87,10 @@ final class CodexAdapter {
         sequence += 1; callbacks[sequence] = completion
         send(["id": sequence, "method": method, "params": params])
         let id = sequence
+        let currentGeneration = generation
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(30))
+            guard self?.generation == currentGeneration else { return }
             if let callback = self?.callbacks.removeValue(forKey: id) { callback(.failure(OpenAIError.message("Codex timeout."))) }
         }
     }
@@ -127,7 +134,7 @@ final class CodexAdapter {
             else if type == "fileChange" {
                 let changes = item["changes"] as? [[String: Any]] ?? []
                 let preview = changes.map { "\($0["path"] as? String ?? "File")\n\($0["diff"] as? String ?? "")" }.joined(separator: "\n")
-                if let id = item["id"] as? String { proposals[id] = String(preview.prefix(20000)) }
+                if let id = item["id"] as? String { proposals[id] = preview }
                 emit(completed ? .fileModified : .toolStarted, changes.compactMap { $0["path"] as? String }.joined(separator: ", "))
             } else if type == "agentMessage", completed { emit(.toolCompleted, String((item["text"] as? String ?? "Codex response").prefix(300))) }
             else { emit(completed ? .toolCompleted : .toolStarted, type) }
@@ -149,14 +156,19 @@ final class CodexAdapter {
         let network = p["networkApprovalContext"] as? [String: Any]
         let preview = network.map { "Network access: \($0["protocol"] as? String ?? "")://\($0["host"] as? String ?? "")" }
             ?? p["command"] as? String ?? proposals[p["itemId"] as? String ?? ""] ?? p["reason"] as? String ?? "Codex file change"
+        guard preview.count <= 20000 else {
+            send(["id": id, "result": ["decision": "decline"]])
+            fail("Codex approval exceeds the review limit. Split the task into smaller changes."); return
+        }
         approvals[key] = id
         state.pendingApproval = ApprovalInfo(sessionId: threadID ?? "", tool: "Codex", command: preview, provider: "codex", requestID: key)
         state.isPinned = true; state.focusId = "integration_codex"; state.view = .approval
         NotificationCenter.default.post(name: .hookExpand, object: IslandView.approval)
         emit(.permissionRequested, preview)
+        let currentGeneration = generation
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(110))
-            if self?.approvals[key] != nil { self?.decide("deny", requestID: key) }
+            if self?.generation == currentGeneration && self?.approvals[key] != nil { self?.decide("deny", requestID: key) }
         }
     }
 

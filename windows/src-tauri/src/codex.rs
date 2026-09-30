@@ -1,5 +1,5 @@
 //! Official app-server JSONL transport; never reads unrelated CLI sessions or credentials.
-use std::{collections::HashMap, io::{BufRead, BufReader, Write}, process::{Child, ChildStdin, Command, Stdio}, sync::{Arc, Mutex}, os::windows::process::CommandExt};
+use std::{collections::HashMap, io::{BufRead, BufReader, Write}, process::{Child, ChildStdin, Command, Stdio}, sync::Mutex, os::windows::process::CommandExt};
 use serde::{Serialize, Deserialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
@@ -133,6 +133,10 @@ impl Codex {
         let detail = if p["networkApprovalContext"].is_object() {
             format!("Network access: {}://{}",p["networkApprovalContext"]["protocol"].as_str().unwrap_or(""),p["networkApprovalContext"]["host"].as_str().unwrap_or(""))
         } else { p["command"].as_str().map(str::to_owned).or_else(||s.proposals.get(p["itemId"].as_str().unwrap_or("")).cloned()).unwrap_or_else(||p["reason"].as_str().unwrap_or("Codex file change").to_owned()) };
+        if detail.chars().count() > 20000 {
+            let _ = send(s,json!({"id":id,"result":{"decision":"decline"}}));
+            emit(app,s,"agentFailed","Codex approval exceeds the review limit. Split the task.".into(),None); return
+        }
         let request_id = id.to_string(); s.approvals.insert(request_id.clone(),id.clone());
         emit(app,s,"permissionRequested",detail,Some(request_id.clone()));
         let app = app.clone();

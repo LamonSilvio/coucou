@@ -6,8 +6,9 @@ import Security
 enum Keychain {
     static let service = "fr.louisraille.NotchBuddy"
 
-    static func save(key: String, value: String) {
-        guard let data = value.data(using: .utf8) else { return }
+    @discardableResult
+    static func save(key: String, value: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
         // Delete existing item first (update pattern)
         let lookup: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
@@ -26,7 +27,7 @@ enum Keychain {
             kSecAttrAccessible as String:   kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             kSecAttrSynchronizable as String: kCFBooleanFalse!,
         ]
-        SecItemAdd(item as CFDictionary, nil)
+        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
     }
 
     static func load(key: String) -> String? {
@@ -84,9 +85,11 @@ final class KeychainStore: @unchecked Sendable {
     }
 
     /// Updates cache + persists to Keychain.
-    func set(_ key: String, value: String) {
+    @discardableResult
+    func set(_ key: String, value: String) -> Bool {
+        guard Keychain.save(key: key, value: value) else { return false }
         lock.withLock { cache[key] = value }
-        Keychain.save(key: key, value: value)
+        return true
     }
 
     /// Removes from cache + Keychain only if the key was previously set.

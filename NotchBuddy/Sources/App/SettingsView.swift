@@ -77,7 +77,10 @@ struct SettingsView: View {
                         HStack {
                             Button("Save key") {
                                 guard !openaiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                                KeychainStore.shared.set("openai-api-key", value: openaiKey.trimmingCharacters(in: .whitespacesAndNewlines))
+                                guard KeychainStore.shared.set("openai-api-key", value: openaiKey.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                                    statusMessage = "Could not save OpenAI key in Keychain. Unlock your Mac and retry."
+                                    return
+                                }
                                 openaiKey = ""
                                 statusMessage = "OpenAI key saved in Keychain."
                             }

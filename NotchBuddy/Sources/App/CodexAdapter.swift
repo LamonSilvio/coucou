@@ -66,6 +66,7 @@ final class CodexAdapter {
     }
 
     func stop() {
+        for id in Array(approvals.keys) { ActionApprovalCenter.shared.resolve("codex-" + generation.uuidString + "-" + id, allow: false) }
         generation = UUID()
         approvals.removeAll(); callbacks.removeAll(); proposals.removeAll()
         process?.terminate(); process = nil; input = nil; buffer = Data()
@@ -76,11 +77,9 @@ final class CodexAdapter {
     }
 
     func decide(_ decision: String, requestID: String) {
-        guard let id = approvals.removeValue(forKey: requestID), AppState.shared.pendingApproval?.requestID == requestID else { return }
+        guard let id = approvals.removeValue(forKey: requestID) else { return }
         send(["id": id, "result": ["decision": CodexProtocol.decision(allow: decision == "allow")]])
-        AppState.shared.pendingApproval = nil; AppState.shared.isPinned = false
         emit(.statusChanged, "Codex working")
-        AppState.shared.view = .overview
     }
 
     private func request(_ method: String, _ params: [String: Any], completion: @escaping (Result<[String: Any], Error>) -> Void) {
@@ -123,6 +122,7 @@ final class CodexAdapter {
         if method == "turn/completed" {
             let turn = p["turn"] as? [String: Any] ?? [:]
             emit(turn["status"] as? String == "failed" ? .agentFailed : .agentCompleted, "Codex turn \(turn["status"] as? String ?? "ended")")
+            for id in Array(approvals.keys) { ActionApprovalCenter.shared.resolve("codex-" + generation.uuidString + "-" + id, allow: false) }
             approvals.removeAll(); turnID = nil
             if AppState.shared.pendingApproval?.provider == "codex" { AppState.shared.pendingApproval = nil; AppState.shared.isPinned = false }
         }
@@ -141,7 +141,7 @@ final class CodexAdapter {
         }
         if method == "serverRequest/resolved", let id = p["requestId"] {
             let key = String(describing: id); approvals.removeValue(forKey: key)
-            if AppState.shared.pendingApproval?.requestID == key { AppState.shared.pendingApproval = nil; AppState.shared.isPinned = false }
+            ActionApprovalCenter.shared.resolve("codex-" + generation.uuidString + "-" + key, allow: false)
         }
         guard let id = message["id"] else { return }
         let key = String(describing: id)
@@ -150,7 +150,7 @@ final class CodexAdapter {
             send(["id": id, "error": ["code": -32601, "message": "Unsupported client request"]]); return
         }
         let state = AppState.shared
-        guard CodexProtocol.canApprove(method: method, thread: threadID, turn: turnID, params: p), state.pendingApproval == nil, state.isPresent else {
+        guard CodexProtocol.canApprove(method: method, thread: threadID, turn: turnID, params: p), state.isPresent else {
             send(["id": id, "result": ["decision": "decline"]]); return
         }
         let network = p["networkApprovalContext"] as? [String: Any]
@@ -164,15 +164,13 @@ final class CodexAdapter {
             fail("Codex approval exceeds the review limit. Split the task into smaller changes."); return
         }
         approvals[key] = id
-        state.pendingApproval = ApprovalInfo(sessionId: threadID ?? "", tool: "Codex", command: preview, provider: "codex", requestID: key)
-        state.isPinned = true; state.focusId = "integration_codex"; state.view = .approval
-        NotificationCenter.default.post(name: .hookExpand, object: IslandView.approval)
-        emit(.permissionRequested, preview)
         let currentGeneration = generation
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(110))
-            if self?.generation == currentGeneration && self?.approvals[key] != nil { self?.decide("deny", requestID: key) }
+        let action = ActionRequest(id: "codex-" + generation.uuidString + "-" + key, provider: "codex", integration: "codex", operation: method, parameters: ["action": preview], risk: .critical)
+        let info = ApprovalInfo(sessionId: threadID ?? "", tool: "Codex", command: action.preview, provider: "actions", requestID: action.id)
+        ActionApprovalCenter.shared.enqueueLegacy(action, info: info) { [weak self] decision in
+            if self?.generation == currentGeneration { self?.decide(decision, requestID: key) }
         }
+        emit(.permissionRequested, preview)
     }
 
     private func fail(_ message: String) { emit(.agentFailed, message); AppState.shared.noteMessage = message; AppState.shared.view = .note }

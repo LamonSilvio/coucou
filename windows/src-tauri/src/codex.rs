@@ -139,7 +139,7 @@ impl Codex {
         if !["item/commandExecution/requestApproval","item/fileChange/requestApproval"].contains(&method) {
             let _ = send(s,json!({"id":id,"error":{"code":-32601,"message":"Unsupported client request"}})); return
         }
-        if !can_approve(method,s.thread.as_deref(),s.turn.as_deref(),p) || !s.approvals.is_empty() {
+        if !can_approve(method,s.thread.as_deref(),s.turn.as_deref(),p) {
             let _ = send(s,json!({"id":id,"result":{"decision":"decline"}})); return
         }
         if method == "item/fileChange/requestApproval" && s.proposals.get(p["itemId"].as_str().unwrap_or("")).is_none_or(|v|v.is_empty()) {
@@ -154,12 +154,15 @@ impl Codex {
             emit(app,s,"agentFailed","Codex approval exceeds the review limit. Split the task.".into(),None); return
         }
         let request_id = id.to_string(); s.approvals.insert(request_id.clone(),id.clone());
-        emit(app,s,"permissionRequested",detail,Some(request_id.clone()));
+        emit(app,s,"permissionRequested",detail.clone(),Some(request_id.clone()));
         let app = app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(110));
+        tauri::async_runtime::spawn(async move {
+            let action=crate::actions::Action{id:format!("codex-{generation}-{request_id}"),provider:"codex".into(),integration:"codex".into(),operation:"agent_action".into(),parameters:json!({"action":detail}),risk:crate::actions::Risk::Critical};
+            let allow=app.state::<crate::actions::Approvals>().authorize(&app,action.clone()).await;
             let codex = app.state::<Codex>();
-            if codex.session.lock().unwrap().as_ref().is_some_and(|s| s.generation == generation && s.approvals.contains_key(&request_id)) { let _ = codex.decide(&app,&request_id,false); }
+            let current=codex.session.lock().unwrap().as_ref().is_some_and(|s|s.generation==generation&&s.approvals.contains_key(&request_id));
+            if current { let result=codex.decide(&app,&request_id,allow);crate::actions::audit(&action,if result.is_ok(){"success"}else{"failure"}); }
+            else { app.state::<crate::actions::Approvals>().decide(&app,&action.id,false); }
         });
     }
 }

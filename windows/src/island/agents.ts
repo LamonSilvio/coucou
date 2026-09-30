@@ -1,4 +1,4 @@
-import { onEvent, Bridge } from "../core/bridge";
+import { onEvent } from "../core/bridge";
 import type { AgentEvent } from "../core/agent-events";
 import { State } from "../core/state";
 import { Sound } from "../core/sound";
@@ -10,10 +10,8 @@ export function registerAgentHandlers(island: Island) {
     const id = "integration_codex";
     if (!State.tasks.some(t => t.id === id)) State.tasks.push({id,name:"Codex",color:"#10A37F",state:"idle",stepIndex:0,steps:[],source:"codex",isIntegration:true});
     if (event.kind === "permissionRequested" && event.requestId) {
-      if (State.paused || State.pendingApproval) { void Bridge.codexDecide(event.requestId,false).catch(() => {}); return; }
-      State.pendingApproval = {provider:"codex",requestId:event.requestId,sessionId:event.session,tool:"Codex",command:event.detail};
-      State.focusId = id; State.isPinned = true;
-      State.updateTask(id,"approval"); Sound.play("approval"); island.alert("approval");
+      // The native central authorization pipeline owns the queued card/decision.
+      State.updateTask(id,"approval");
     } else {
       const pending = State.pendingApproval;
       if (pending?.provider === "codex" && (event.kind === "sessionEnded" || event.kind === "agentCompleted" || event.kind === "agentFailed" ||

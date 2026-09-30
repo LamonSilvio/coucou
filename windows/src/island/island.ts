@@ -140,15 +140,11 @@ export class Island {
         void Bridge.log(`decide ${d} req=${req?.requestId ?? "none"}`);
         if (!req) return;
         Sound.play(d === "deny" ? "blip" : "approve");
-        if (req.provider === "codex") void Bridge.codexDecide(req.requestId, d === "allow").catch(() => {});
-        else void Bridge.approvalDecision(req.requestId, d);
-        State.pendingApproval = null;
-        State.isPinned = false;
-        this.fsm.pinned = false;
+        resolveApproval(req.requestId, d === "allow");
         const id = req.provider === "codex" ? "integration_codex" : "integration_claude";
         State.updateTask(id, "working");
         State.setPillBadge(id, null);
-        this.setView(State.defaultView());
+        if (!State.pendingApproval) this.setView(State.defaultView());
       },
       toggleSound: () => {
         State.settings.soundEnabled = !State.settings.soundEnabled;
@@ -888,3 +884,4 @@ export class Island {
     return chatPromptHeight(State.chatHistory.length);
   }
 }
+import { resolveApproval } from "./approvals";

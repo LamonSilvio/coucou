@@ -302,7 +302,7 @@ function buildApproval(actions: ViewActions): ViewHost {
       // The whole point of approving here rather than in the terminal: this line
       // is the command, the file path or the URL being authorised, not just the
       // name of the tool asking.
-      const codex = State.pendingApproval?.provider === "codex";
+      const codex = ["codex", "actions"].includes(State.pendingApproval?.provider ?? "");
       code.style.whiteSpace = codex ? "pre-wrap" : "";
       code.style.maxHeight = codex ? "65px" : "";
       code.style.overflow = codex ? "auto" : "";
@@ -310,12 +310,13 @@ function buildApproval(actions: ViewActions): ViewHost {
       // Two buttons, built once. Rebuilding them between a mouse-down and a
       // mouse-up would swallow the click, and there is nothing left to vary:
       // "Always" is gone until the remembered-rules list exists to back it.
-      if (rowKey === "built") return;
-      rowKey = "built";
+      const id = State.pendingApproval?.requestId ?? "";
+      if (rowKey === id) return;
+      rowKey = id;
       clear(row);
       row.append(
-        btn("Deny", "secondary", () => actions.decide("deny"), "N"),
-        btn("Allow", "primary", () => actions.decide("allow"), "Y"),
+        btn("Deny", "secondary", () => { if (State.pendingApproval?.requestId === id) actions.decide("deny"); }, "N"),
+        btn("Allow", "primary", () => { if (State.pendingApproval?.requestId === id) actions.decide("allow"); }, "Y"),
       );
     },
   };

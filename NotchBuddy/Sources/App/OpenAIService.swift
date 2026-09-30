@@ -257,6 +257,7 @@ final class OpenAIService: AIProvider {
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         let config = URLSessionConfiguration.ephemeral
         config.urlCache = nil
+        config.timeoutIntervalForResource = 120
         let session = URLSession(configuration: config, delegate: NoAIRedirects(), delegateQueue: nil)
         activeSession = session
         defer { session.invalidateAndCancel(); activeSession = nil }

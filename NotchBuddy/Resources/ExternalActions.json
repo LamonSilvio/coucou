@@ -1,0 +1,12 @@
+{
+  "github.create_issue": {"origin":"https://api.github.com","path":"/repos/{owner}/{repo}/issues","method":"POST","key":"github-token","required":["owner","repo","title","body"],"fields":["owner","repo","title","body"],"bodyFields":["title","body"]},
+  "github.comment_issue": {"origin":"https://api.github.com","path":"/repos/{owner}/{repo}/issues/{number}/comments","method":"POST","key":"github-token","required":["owner","repo","number","body"],"fields":["owner","repo","number","body"],"bodyFields":["body"]},
+  "notion.create_page": {"origin":"https://api.notion.com","path":"/v1/pages","method":"POST","key":"notion-api-key","required":["parent","properties"],"fields":["parent","properties","children"],"bodyFields":["parent","properties","children"]},
+  "notion.append_content": {"origin":"https://api.notion.com","path":"/v1/blocks/{block_id}/children","method":"PATCH","key":"notion-api-key","required":["block_id","children"],"fields":["block_id","children"],"bodyFields":["children"]},
+  "n8n.run_workflow": {"origin":"configured-webhook","path":"","method":"POST","key":"n8n-webhook-token","required":["workflow","input","effect"],"fields":["workflow","input","effect"],"bodyFields":["input"]},
+  "vercel.preview_deploy": {"origin":"https://api.vercel.com","path":"/v13/deployments","method":"POST","key":"vercel-token","required":["name","gitSource"],"fields":["name","gitSource","project"],"bodyFields":["name","gitSource","project"]},
+  "vercel.production_deploy": {"origin":"https://api.vercel.com","path":"/v13/deployments","method":"POST","key":"vercel-token","required":["name","gitSource"],"fields":["name","gitSource","project"],"bodyFields":["name","gitSource","project"]},
+  "resend.send_email": {"origin":"https://api.resend.com","path":"/emails","method":"POST","key":"resend-api-key","required":["from","to","subject","text"],"fields":["from","to","subject","text"],"bodyFields":["from","to","subject","text"]},
+  "stripe.refund": {"origin":"https://api.stripe.com","path":"/v1/refunds","method":"POST","key":"stripe-api-key","required":["payment_intent","amount"],"fields":["payment_intent","amount"],"bodyFields":["payment_intent","amount"]},
+  "calcom.create_booking": {"origin":"https://api.cal.com","path":"/v2/bookings","method":"POST","key":"calcom-api-key","required":["start","eventTypeId","attendee"],"fields":["start","eventTypeId","attendee"],"bodyFields":["start","eventTypeId","attendee"]}
+}

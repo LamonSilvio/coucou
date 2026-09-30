@@ -66,6 +66,7 @@ pub enum ChatContext {
 #[serde(rename_all = "camelCase")]
 pub struct ChatReply {
     pub text: String,
+    pub provider: &'static str,
 }
 
 /// One chat turn. Returns the assistant's text, or a message the island shows
@@ -154,7 +155,7 @@ pub async fn send(
     if text.is_empty() {
         return Err("No response text.".into());
     }
-    Ok(ChatReply { text })
+    Ok(ChatReply { text, provider: "Anthropic" })
 }
 
 async fn call(key: &str, body: &Value) -> Result<Value, String> {

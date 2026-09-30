@@ -18,7 +18,7 @@ function bubble(message: ChatMessage): HTMLElement {
       h("div", { class: "bubble", text: message.content }),
     );
   }
-  return h("div", { class: "chat-row" }, h("div", { class: "reply", text: message.content }));
+  return h("div", { class: "chat-row" }, h("div", { class: "reply", text: (message.provider ? message.provider + " · " : "") + message.content }));
 }
 
 function typingDots(): HTMLElement {
@@ -82,7 +82,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
     try {
       const reply = await Bridge.chatSend(query, context);
-      State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text });
+      State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text, provider: reply.provider });
       State.stateOverride = null;
       Sound.play("finish");
     } catch (err) {
@@ -92,6 +92,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       Sound.play("error");
     } finally {
       sending = false;
+      State.activeAITool = null;
       State.notify();
       onHeightChange();
       input.focus();
@@ -119,12 +120,12 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
       }
 
       const thinking = State.stateOverride === "thinking";
-      const count = State.chatHistory.length + (thinking ? 0.5 : 0);
+      const count = State.chatHistory.length + (thinking ? (State.activeAITool ? 0.75 : 0.5) : 0);
       if (count !== renderedCount) {
         renderedCount = count;
         clear(log);
         for (const m of State.chatHistory) log.append(bubble(m));
-        if (thinking) log.append(typingDots());
+        if (thinking) { log.append(typingDots()); if (State.activeAITool) log.append(h("div", {class:"hint",text:State.activeAITool})); }
         log.scrollTop = log.scrollHeight;
       }
 

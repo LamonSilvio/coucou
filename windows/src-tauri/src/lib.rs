@@ -258,18 +258,20 @@ fn codex_decide(app: AppHandle, codex: State<codex::Codex>, request_id: String, 
 /// One chat turn. The API key and any file bytes stay on the Rust side.
 #[tauri::command]
 async fn chat_send(
+    app: AppHandle,
     shared: State<'_, Shared>,
     chat: State<'_, Chat>,
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
     let settings = shared.settings.lock().unwrap().clone();
-    chat.lock().await.send(&settings, query, context).await
+    chat.lock().await.send(&app, &settings, query, context).await
 }
 
 #[tauri::command]
-async fn chat_reset(chat: State<'_, Chat>) {
+async fn chat_reset(chat: State<'_, Chat>) -> Result<(), String> {
     chat.lock().await.reset();
+    Ok(())
 }
 
 /// Copies a dropped file into the inbox and reports its name back.

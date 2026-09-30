@@ -31,7 +31,13 @@ struct OpenAIModelCatalog: Codable {
 @MainActor
 final class OpenAIService: AIProvider {
     static let shared = OpenAIService()
-    private var history: [[String: Any]] = []
+    private(set) var history: [[String: Any]] = []
+    private let settings: UserDefaults
+    private let keyProvider: () -> String?
+    private let transport: ((URLRequest) async throws -> (Data, HTTPURLResponse))?
+    init(settings: UserDefaults = .standard, keyProvider: @escaping () -> String? = { KeychainStore.shared.get("openai-api-key") }, transport: ((URLRequest) async throws -> (Data, HTTPURLResponse))? = nil) {
+        self.settings = settings; self.keyProvider = keyProvider; self.transport = transport
+    }
     private var busy = false
     func clearConversation() { if !busy { history = [] } }
 
@@ -40,10 +46,10 @@ final class OpenAIService: AIProvider {
         busy = true
         defer { busy = false; state.activeAITool = nil }
         do {
-            guard let key = KeychainStore.shared.get("openai-api-key"), !key.isEmpty else {
+            guard let key = keyProvider(), !key.isEmpty else {
                 throw OpenAIError.message("OpenAI API key missing. Configure it in Settings.")
             }
-            let defaults = UserDefaults.standard
+            let defaults = settings
             let catalog = try OpenAIModelCatalog.load()
             let model = defaults.string(forKey: "openaiModel").flatMap { $0.isEmpty ? nil : $0 } ?? catalog.defaultModel
             let caps = catalog.models[model]
@@ -76,7 +82,7 @@ final class OpenAIService: AIProvider {
                 body["include"] = ["reasoning.encrypted_content"]
             }
             if !tools.isEmpty { state.activeAITool = "OpenAI tools available: " + tools.compactMap { $0["type"] as? String }.joined(separator: ", ") }
-            let result = try await call(body, key: key)
+            let result = try await call(body, key: key, onTool: { state.activeAITool = $0 })
             guard result["status"] as? String == "completed", let output = result["output"] as? [[String: Any]] else {
                 throw OpenAIError.message("OpenAI response incomplete or failed. Try a higher output limit.")
             }
@@ -110,22 +116,39 @@ final class OpenAIService: AIProvider {
         }
     }
 
-    private func call(_ body: [String: Any], key: String) async throws -> [String: Any] {
+    private func call(_ body: [String: Any], key: String, onTool: (String) -> Void) async throws -> [String: Any] {
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
         request.httpMethod = "POST"
         request.timeoutInterval = 120
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        var requestBody = body
+        requestBody["stream"] = transport == nil
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         let config = URLSessionConfiguration.ephemeral
         config.urlCache = nil
         let session = URLSession(configuration: config, delegate: NoAIRedirects(), delegateQueue: nil)
         defer { session.invalidateAndCancel() }
-        let (data, response) = try await session.data(for: request)
+        if let transport {
+            let (data, response) = try await transport(request)
+            guard response.statusCode == 200 else { throw OpenAIError.http(response.statusCode) }
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw OpenAIError.message("Invalid OpenAI response.") }
+            return json
+        }
+        let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw OpenAIError.message("Invalid OpenAI response.") }
         guard http.statusCode == 200 else { throw OpenAIError.http(http.statusCode) }
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw OpenAIError.message("Invalid OpenAI response.") }
-        return json
+        for try await line in bytes.lines {
+            guard line.count < 4_000_000 else { throw OpenAIError.message("OpenAI event exceeded the size limit.") }
+            guard line.hasPrefix("data:"), let data = String(line.dropFirst(5)).data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
+            let type = event["type"] as? String ?? ""
+            if type.hasPrefix("response.web_search_call.") { onTool("OpenAI Web Search") }
+            if type.hasPrefix("response.code_interpreter_call.") { onTool("OpenAI Code Interpreter") }
+            if ["response.completed", "response.incomplete", "response.failed"].contains(type), let result = event["response"] as? [String: Any] { return result }
+            if type == "error" { throw OpenAIError.message("OpenAI stream failed. Retry later.") }
+        }
+        throw OpenAIError.message("OpenAI connection closed before completion. Retry later.")
     }
 
     static func fileBlock(_ url: URL, name: String, vision: Bool) throws -> [String: Any] {

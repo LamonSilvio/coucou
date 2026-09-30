@@ -61,6 +61,7 @@ async function main() {
     void refreshConfigured();
   });
 
+  await onEvent<string>("chat-tool", tool => { State.activeAITool = tool; State.notify(); });
   registerHookHandlers(island);
   registerAgentHandlers(island);
   registerIntegrationHandlers(island);

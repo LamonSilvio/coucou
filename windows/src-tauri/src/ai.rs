@@ -26,12 +26,12 @@ impl Router {
     pub fn reset(&mut self) {
         self.claude.reset(); self.openai.reset(); self.active = None;
     }
-    pub async fn send(&mut self, settings: &Settings, query: String, context: Option<claude::ChatContext>) -> Result<claude::ChatReply, String> {
+    pub async fn send(&mut self, app: &tauri::AppHandle, settings: &Settings, query: String, context: Option<claude::ChatContext>) -> Result<claude::ChatReply, String> {
         let id = resolve(settings.ai_provider, secrets::present("anthropic-api-key"), secrets::present("openai-api-key"));
         if self.active != Some(id) { self.reset(); self.active = Some(id); }
         match id {
             Provider::Anthropic => claude::send(&self.claude, &settings.model, query, context).await,
-            Provider::Openai => self.openai.send(settings, query, context).await,
+            Provider::Openai => self.openai.send(app, settings, query, context).await,
             Provider::Auto => unreachable!(),
         }
     }

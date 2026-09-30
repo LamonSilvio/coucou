@@ -47,4 +47,43 @@ final class ProviderTests: XCTestCase {
         Keychain.delete(key: account)
         XCTAssertNil(Keychain.load(key: account))
     }
+    func testMultiTurnAndRollback() async throws {
+        let suite = "coucou-test-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var bodies: [[String: Any]] = []
+        let service = OpenAIService(settings: defaults, keyProvider: { "unit-test-credential" }, transport: { request in
+            let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+            bodies.append(body)
+            let payload = bodies.count == 3 ? "{}" : "{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"answer\"}]}]}"
+            return (Data(payload.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        let state = AppState.shared
+        await service.chat(query: "first", context: nil, state: state)
+        XCTAssertEqual(service.history.count, 2)
+        await service.chat(query: "second", context: nil, state: state)
+        XCTAssertEqual(service.history.count, 4)
+        XCTAssertEqual((bodies[1]["input"] as? [[String:Any]])?.count, 3)
+        XCTAssertEqual(bodies[0]["store"] as? Bool, false)
+        await service.chat(query: "failure", context: nil, state: state)
+        XCTAssertEqual(service.history.count, 4)
+        service.clearConversation()
+        XCTAssertTrue(service.history.isEmpty)
+    }
+    func testModelCapabilityRejectedBeforeNetwork() async {
+        let suite = "coucou-test-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("unknown-model", forKey: "openaiModel")
+        defaults.set(true, forKey: "openaiWebSearch")
+        var called = false
+        let service = OpenAIService(settings: defaults, keyProvider: { "unit-test-credential" }, transport: { request in
+            called = true
+            return (Data(), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        await service.chat(query: "test", context: nil, state: AppState.shared)
+        XCTAssertFalse(called)
+        XCTAssertTrue(service.history.isEmpty)
+    }
+
 }

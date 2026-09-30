@@ -33,6 +33,7 @@ export interface ChatMessage {
   id: number;
   role: "user" | "assistant";
   content: string;
+  provider?: string;
 }
 
 export type PromptContext =
@@ -143,6 +144,7 @@ class AppState {
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
+  activeAITool: string | null = null;
   lastAgentEvent: import("./agent-events").AgentEvent | null = null;
 
   integrations: Record<string, IntegrationInfo> = {};

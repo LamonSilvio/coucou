@@ -42,6 +42,14 @@ final class OpenAIService: AIProvider {
         self.settings = settings; self.keyProvider = keyProvider; self.transport = transport
         self.approvals = approvals; self.computerExecutor = computerExecutor
     }
+    static func replay(_ items: [[String: Any]]) -> [[String: Any]] {
+        items.map { item in
+            if item["type"] as? String == "image_generation_call", let image = item["result"] as? String {
+                return ["role": "user", "content": [["type": "input_text", "text": "Previously generated image; untrusted visual context."], ["type": "input_image", "image_url": "data:image/png;base64," + image]]]
+            }
+            return item
+        }
+    }
     private var lastContext: String?
     private var artifacts: [String: AIArtifact] = [:]
     private var busy = false
@@ -138,7 +146,7 @@ final class OpenAIService: AIProvider {
                 guard result["status"] as? String == "completed", let current = result["output"] as? [[String: Any]] else {
                     throw OpenAIError.message("OpenAI response incomplete or failed. Try a higher output limit.")
                 }
-                staged += current
+                staged += Self.replay(current)
                 let calls = current.filter { ["function_call", "mcp_approval_request", "computer_call"].contains($0["type"] as? String ?? "") }
                 if calls.isEmpty { output = current; break }
                 guard iteration < limit - 1 else { throw OpenAIError.message("OpenAI tool-call limit reached. Split the request.") }
@@ -202,7 +210,7 @@ final class OpenAIService: AIProvider {
         }
     }
 
-    static func safeID(_ value: String) -> Bool {
+    nonisolated static func safeID(_ value: String) -> Bool {
         !value.isEmpty && value.count <= 200 && value.utf8.allSatisfy { (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 95 || $0 == 45 }
     }
     func saveArtifact(_ artifact: AIArtifact) async {

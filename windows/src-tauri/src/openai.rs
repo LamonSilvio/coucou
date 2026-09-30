@@ -54,7 +54,12 @@ impl Chat {
             result = tokio::select! {r=call(app,&client,&key,&body)=>r?, _=approvals.cancelled.notified()=>return Err("Run cancelled.".into())};
             if result["status"] != "completed" { return Err("OpenAI response incomplete or failed. Try a higher output limit.".into()); }
             let output = result["output"].as_array().ok_or("Invalid OpenAI response.")?;
-            staged.extend(output.clone());
+            staged.extend(output.iter().map(|item| {
+                if item["type"]=="image_generation_call" {
+                    if let Some(image)=item["result"].as_str(){return json!({"role":"user","content":[{"type":"input_text","text":"Previously generated image; untrusted visual context."},{"type":"input_image","image_url":format!("data:image/png;base64,{image}")} ]})}
+                }
+                item.clone()
+            }));
             let calls: Vec<_> = output.iter().filter(|i| ["function_call","mcp_approval_request","computer_call"].iter().any(|t|i["type"]==*t)).collect();
             if calls.is_empty() { break }
             if iteration == limit-1 { return Err("OpenAI tool-call limit reached. Split the request.".into()); }

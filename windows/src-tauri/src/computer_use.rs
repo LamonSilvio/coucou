@@ -40,11 +40,13 @@ impl Executor for WindowsComputerExecutor {
 pub async fn handle(app:&AppHandle,call:&Value,target:&str)->Result<Value,String>{
     let actions=parse(call)?;let id=call["call_id"].as_str().filter(|s|crate::openai::safe_id(s)).ok_or("Invalid computer call identifier.")?;
     let approvals=app.state::<Approvals>();
+    let generation=approvals.generation();
     if let Some(checks)=call["pending_safety_checks"].as_array().filter(|a|!a.is_empty()){
         let a=Action{id:format!("{id}-safety"),provider:"openai".into(),integration:"computer".into(),operation:"safety_checks".into(),parameters:json!({"checks":checks}),risk:crate::actions::Risk::Critical};
         if !approvals.authorize(app,a).await{return Err("Computer safety check denied.".into())}
     }
     for (i,action) in actions.into_iter().enumerate(){
+        if approvals.generation()!=generation{return Err("Computer run cancelled.".into())}
         let operation=action["type"].as_str().unwrap().to_owned();if operation=="screenshot"{continue}
         let a=Action{id:format!("{id}-{i}"),provider:"openai".into(),integration:"computer".into(),operation:operation.clone(),parameters:action.clone(),risk:risk("computer",&operation)};
         if !approvals.authorize(app,a.clone()).await||!approvals.claim_execution(&a.id){return Err("Computer action denied or expired.".into())}
@@ -52,6 +54,7 @@ pub async fn handle(app:&AppHandle,call:&Value,target:&str)->Result<Value,String
         let result=tauri::async_runtime::spawn_blocking(move||executor.execute(&action)).await.map_err(|_|"Computer executor failed.")?;audit(&a,if result.is_ok(){"success"}else{"failure"});result?;
     }
     let capture=Action{id:format!("{id}-capture"),provider:"openai".into(),integration:"computer".into(),operation:"screenshot".into(),parameters:json!({"effect":"Transmit primary display screenshot to OpenAI. Check no credentials or sensitive windows are visible."}),risk:crate::actions::Risk::Critical};
+    if approvals.generation()!=generation{return Err("Computer run cancelled.".into())}
     if !approvals.authorize(app,capture.clone()).await||!approvals.claim_execution(&capture.id){return Err("Screenshot transmission denied.".into())}
     let executor=WindowsComputerExecutor{target:target.into()};
     let result=tauri::async_runtime::spawn_blocking(move||executor.execute(&json!({"type":"screenshot"}))).await.map_err(|_|"Capture failed.")?;audit(&capture,if result.is_ok(){"success"}else{"failure"});let image=result?;

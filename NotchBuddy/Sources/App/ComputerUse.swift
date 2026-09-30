@@ -20,6 +20,7 @@ enum ComputerUse {
     }
     @MainActor static func handle(_ call: [String: Any], executor: any ComputerExecutor, approvals: ActionApprovalCenter = .shared) async throws -> [String: Any] {
         let actions = try parse(call)
+        let generation = approvals.generation
         guard let id = call["call_id"] as? String, OpenAIService.safeID(id) else { throw OpenAIError.message("Invalid computer call identifier.") }
         let checks = call["pending_safety_checks"] as? [[String: Any]] ?? []
         if !checks.isEmpty {
@@ -27,6 +28,7 @@ enum ComputerUse {
             guard await approvals.authorize(request) else { throw OpenAIError.message("Computer safety check denied.") }
         }
         for (index, action) in actions.enumerated() {
+            guard approvals.generation == generation else { throw OpenAIError.message("Computer run cancelled.") }
             let type = action["type"] as! String
             if type == "screenshot" { continue }
             let request = ActionRequest(id: id + "-" + String(index), provider: "openai", integration: "computer", operation: type, parameters: action, risk: ActionRiskEvaluator.risk(integration: "computer", operation: type))
@@ -36,6 +38,7 @@ enum ComputerUse {
             catch { approvals.record(request, outcome: "failure"); throw error }
         }
         let capture = ActionRequest(id: id + "-capture", provider: "openai", integration: "computer", operation: "screenshot", parameters: ["effect": "Transmit the primary display screenshot to OpenAI. Check that no credentials or sensitive windows are visible."], risk: .critical)
+        guard approvals.generation == generation else { throw OpenAIError.message("Computer run cancelled.") }
         guard await approvals.authorize(capture), approvals.claimExecution(capture.id) else { throw OpenAIError.message("Screenshot transmission denied; run stopped.") }
         let image: String
         do { image = try await executor.screenshot(); approvals.record(capture, outcome: "success") }

@@ -41,6 +41,7 @@ final class ActionApprovalCenter {
     private var decided: Set<String> = []
     private var executed: Set<String> = []
     private var approved: Set<String> = []
+    private(set) var generation = 0
     private var legacy: [String: ApprovalInfo] = [:]
     private let present: (ActionRequest) -> Void
     private let available: () -> Bool
@@ -96,7 +97,7 @@ final class ActionApprovalCenter {
         clear(id); audit(pending.action, allow ? "approved" : "denied")
         pending.finish(allow ? decision : decision == "ask" ? "ask" : "deny"); pump()
     }
-    func cancelAll() { for id in queue.map({ $0.action.id }) { resolve(id, allow: false) } }
+    func cancelAll() { generation += 1; for id in queue.map({ $0.action.id }) { resolve(id, allow: false) } }
     func claimExecution(_ id: String) -> Bool { approved.contains(id) && executed.insert(id).inserted }
     func record(_ action: ActionRequest, outcome: String) { audit(action, outcome) }
     func execute(_ action: ActionRequest, executor: () async throws -> String) async -> String {

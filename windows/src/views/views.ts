@@ -299,6 +299,7 @@ function buildApproval(actions: ViewActions): ViewHost {
     sync() {
       clear(who);
       who.append(agentWho(State.focusTask, "needs permission"));
+      if (State.pendingApproval?.command.includes("Risk: CRITICAL")) who.append(h("div",{text:"CRITICAL — explicit consent required",style:"color:#f4505e;font-weight:700;font-size:11px"}));
       // The whole point of approving here rather than in the terminal: this line
       // is the command, the file path or the URL being authorised, not just the
       // name of the tool asking.

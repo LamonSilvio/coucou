@@ -8,7 +8,7 @@ struct ActionRequest: Identifiable {
     let parameters: [String: Any]
     let risk: SecurityLevel
     var preview: String {
-        let data = (try? JSONSerialization.data(withJSONObject: parameters, options: [.prettyPrinted, .sortedKeys])) ?? Data()
+        let data = (try? JSONSerialization.data(withJSONObject: SecretRedaction.value(parameters), options: [.prettyPrinted, .sortedKeys])) ?? Data()
         return "Provider: \(provider)\nServer / Integration: \(integration)\nAction: \(operation)\nRisk: \(risk.rawValue.uppercased())\n" + SecretRedaction.text(String(data: data, encoding: .utf8) ?? "{}")
     }
 }
@@ -24,6 +24,21 @@ enum ActionRiskEvaluator {
 }
 
 enum SecretRedaction {
+    static func value(_ input: Any) -> Any {
+        if let object = input as? [String: Any] {
+            return object.mapValues { value in Self.value(value) }.reduce(into: [String: Any]()) { result, pair in
+                let key = pair.key.lowercased()
+                result[pair.key] = key == "key" || ["password", "token", "secret", "authorization", "cookie", "api_key", "api-key", "apikey"].contains(where: key.contains) ? "[REDACTED]" : pair.value
+            }
+        }
+        if let array = input as? [Any] { return array.map(Self.value) }
+        if let string = input as? String { return text(string) }
+        return input
+    }
+    static func sensitive(_ input: [String: Any]) -> Bool {
+        guard let original = try? JSONSerialization.data(withJSONObject: input, options: .sortedKeys), let redacted = try? JSONSerialization.data(withJSONObject: value(input), options: .sortedKeys) else { return true }
+        return original != redacted
+    }
     static func text(_ text: String) -> String {
         var result = text
         for pattern in [#"(?i)(sk-[\w-]{8,}|gh[pousr]_[\w]{8,}|Bearer\s+[^\s\"]+)"#, #"(?i)\"[^\"]*(?:password|token|secret|authorization|cookie|api.?key)[^\"]*\"\s*:\s*\"[^\"]*\""#] {

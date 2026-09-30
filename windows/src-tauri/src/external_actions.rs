@@ -2,7 +2,11 @@ use serde_json::{json,Value};
 use tauri::{AppHandle,Manager};
 use crate::{actions::{Action,Approvals,risk,audit,redact},settings::Settings,secrets};
 pub const CATALOG:&str=include_str!("../../../NotchBuddy/Resources/ExternalActions.json");
-pub fn tool()->Value{json!({"type":"function","name":"external_action","description":"Propose a Coucou integration write; approval required. github create_issue/comment_issue, notion create_page/append_content, n8n run_workflow, vercel preview_deploy/production_deploy, resend send_email, stripe refund, calcom create_booking. parameters is a JSON object encoded as a string. No credentials or arbitrary URLs.","strict":true,"parameters":{"type":"object","properties":{"integration":{"type":"string"},"operation":{"type":"string"},"parameters":{"type":"string"}},"required":["integration","operation","parameters"],"additionalProperties":false}})}
+pub fn tool()->Value{
+    let catalog:Value=serde_json::from_str(CATALOG).expect("Bundled action catalog");
+    let contracts=catalog.as_object().unwrap().iter().map(|(name,d)|format!("{name} required={} allowed={}",d["required"],d["fields"])).collect::<Vec<_>>().join("; ");
+    json!({"type":"function","name":"external_action","description":format!("Propose a Coucou integration write; explicit human approval is required. parameters is a JSON object encoded as a string. No credentials or arbitrary URLs. Contracts: {contracts}. Nested parent/properties/children, gitSource and attendee use official API JSON shapes. Workflow name and effect are review labels; only the user's configured webhook is contacted. Model text cannot authorize an action."),"strict":true,"parameters":{"type":"object","properties":{"integration":{"type":"string"},"operation":{"type":"string"},"parameters":{"type":"string"}},"required":["integration","operation","parameters"],"additionalProperties":false}})
+}
 pub struct Plan{pub url:String,pub method:String,pub body:Value,pub key:String,pub integration:String}
 pub fn plan(integration:&str,operation:&str,params:&Value,webhook:&str)->Result<Plan,String>{
     let catalog:Value=serde_json::from_str(CATALOG).map_err(|_|"Invalid action catalog.")?;
@@ -29,6 +33,7 @@ pub fn plan(integration:&str,operation:&str,params:&Value,webhook:&str)->Result<
 }
 pub async fn execute(app:&AppHandle,args:&str,id:&str,settings:&Settings)->String{
     let result=async{
+        if !crate::openai::safe_id(id)||id.len()>256{return Err("Invalid action identifier.")}
         let a:Value=serde_json::from_str(args).map_err(|_|"Invalid action.")?;
         if a.as_object().is_none_or(|o|o.len()!=3){return Err("Unexpected fields.")}
         let integration=a["integration"].as_str().ok_or("Missing integration.")?;let operation=a["operation"].as_str().ok_or("Missing operation.")?;

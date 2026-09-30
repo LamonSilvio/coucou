@@ -195,22 +195,26 @@ struct ApprovalView: View {
     var approval: ApprovalInfo? { state.pendingApproval }
 
     var body: some View {
+        let requestID = approval?.requestID
         ZStack {
             CardBackground(wash: .amber)
             VStack(alignment: .leading, spacing: 5) {
                 AgentWho(task: state.focusTask, label: "needs permission")
+                if approval?.command.contains("Risk: CRITICAL") == true {
+                    Text("CRITICAL — explicit consent required").font(.system(size: 11, weight: .bold)).foregroundColor(.red)
+                }
                 if ["codex", "actions"].contains(approval?.provider ?? "") {
                     ScrollView { Text(approval?.command ?? "…").font(.system(size: 11, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 55)
                 } else { CodeBlock(text: approval?.command ?? approval?.tool ?? "…") }
                 HStack(spacing: 8) {
                     SecondaryButton("Deny") {
-                        decide("deny")
+                        decide("deny", requestID: requestID)
                     }
                     PrimaryButton("Allow") {
-                        decide("allow")
+                        decide("allow", requestID: requestID)
                     }
                     if approval?.provider == "claudeCode" {
-                        SecondaryButton("Always") { HookServer.shared.sendApprovalDecision("always") }
+                        SecondaryButton("Always") { decide("always", requestID: requestID) }
                     }
                 }
             }
@@ -220,7 +224,8 @@ struct ApprovalView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
-    private func decide(_ decision: String) {
+    private func decide(_ decision: String, requestID: String?) {
+        guard requestID == state.pendingApproval?.requestID else { return }
         if let approval, approval.provider == "actions" {
             ActionApprovalCenter.shared.resolve(approval.requestID, allow: decision == "allow")
         } else if let approval, approval.provider == "codex" {

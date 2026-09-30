@@ -15,9 +15,9 @@ pub fn risk(integration:&str,operation:&str)->Risk {
 pub struct Action {pub id:String,pub provider:String,pub integration:String,pub operation:String,pub parameters:Value,pub risk:Risk}
 pub fn redact(v:&Value)->Value {
     match v {
-        Value::Object(map)=>Value::Object(map.iter().map(|(k,v)| (k.clone(),if k.eq_ignore_ascii_case("key") || ["password","token","secret","authorization","cookie","api_key","apikey"].iter().any(|s|k.to_lowercase().contains(s)){json!("[REDACTED]")}else{redact(v)})).collect()),
+        Value::Object(map)=>Value::Object(map.iter().map(|(k,v)| (k.clone(),if k.eq_ignore_ascii_case("key") || ["password","token","secret","authorization","cookie","api_key","api-key","apikey"].iter().any(|s|k.to_lowercase().contains(s)){json!("[REDACTED]")}else{redact(v)})).collect()),
         Value::Array(a)=>json!(a.iter().map(redact).collect::<Vec<_>>()),
-        Value::String(s) if ["sk-","ghp_","Bearer "].iter().any(|p|s.contains(p))=>json!("[REDACTED]"),
+        Value::String(s) if ["sk-","ghp_","gho_","ghu_","ghs_","ghr_","bearer "].iter().any(|p|s.to_lowercase().contains(p))=>json!("[REDACTED]"),
         _=>v.clone()
     }
 }

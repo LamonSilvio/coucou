@@ -7,11 +7,12 @@ pub struct Server {pub name:String,pub endpoint:String,pub enabled:bool,pub tool
 impl Server {
     pub fn valid(&self)->bool{
         let Ok(u)=reqwest::Url::parse(&self.endpoint)else{return false};
-        crate::openai::safe_id(&self.name)&&self.name.len()<=32&&!self.tools.is_empty()&&self.tools.iter().all(|t|crate::openai::safe_id(t))&&u.scheme()=="https"&&u.host_str().is_some()&&u.username().is_empty()&&u.password().is_none()&&u.query().is_none()&&u.fragment().is_none()
+        crate::openai::safe_id(&self.name)&&self.name.len()<=32&&self.tools.iter().all(|t|crate::openai::safe_id(t))&&u.scheme()=="https"&&u.host_str().is_some()&&u.username().is_empty()&&u.password().is_none()&&u.query().is_none()&&u.fragment().is_none()
     }
     pub fn tool(&self)->Result<Value,String>{
         if !self.valid(){return Err("Invalid MCP server configuration.".into())}
-        let mut v=json!({"type":"mcp","server_label":self.name,"server_url":self.endpoint,"require_approval":"always","allowed_tools":self.tools});
+        let mut v=json!({"type":"mcp","server_label":self.name,"server_url":self.endpoint,"require_approval":"always"});
+        if !self.tools.is_empty(){v["allowed_tools"]=json!(self.tools);}
         if let Some(token)=secrets::get(&format!("mcp-token-{}",self.name)){v["authorization"]=json!(token)}
         Ok(v)
     }

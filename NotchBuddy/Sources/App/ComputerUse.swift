@@ -12,7 +12,7 @@ enum ComputerUse {
     static func parse(_ call: [String: Any]) throws -> [[String: Any]] {
         guard call["type"] as? String == "computer_call", let actions = call["actions"] as? [[String: Any]], !actions.isEmpty, actions.count <= 20 else { throw OpenAIError.message("Invalid computer call.") }
         for action in actions {
-            guard let type = action["type"] as? String, supported.contains(type), SecretRedaction.text(String(describing: action)) == String(describing: action) else { throw OpenAIError.message("Unsupported or sensitive computer action.") }
+            guard let type = action["type"] as? String, supported.contains(type), !SecretRedaction.sensitive(action) else { throw OpenAIError.message("Unsupported or sensitive computer action.") }
             if type == "type" { guard let text = action["text"] as? String, !text.isEmpty, text.count <= 2000 else { throw OpenAIError.message("Computer text exceeds the limit.") } }
             if type == "keypress" { guard let keys = action["keys"] as? [String], keys.count <= 4, keys.allSatisfy({ ["ENTER", "TAB", "ESC", "ESCAPE", "BACKSPACE", "ARROWUP", "ARROWDOWN", "ARROWLEFT", "ARROWRIGHT"].contains($0.uppercased()) }) else { throw OpenAIError.message("Credential/clipboard shortcuts and unknown keys are blocked.") } }
         }

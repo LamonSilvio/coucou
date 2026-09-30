@@ -21,8 +21,9 @@ function bubble(message: ChatMessage): HTMLElement {
   const reply = h("div", {class:"reply"},h("div", {text:(message.provider ? message.provider + " · " : "") + message.content}));
   for (const encoded of message.images ?? []) {
     const uri="data:image/png;base64,"+encoded;
-    reply.append(h("img",{src:uri,alt:"Generated image",style:"max-width:100%;max-height:180px;object-fit:contain"}),
-      h("button",{text:"Save Image",onclick:()=>void Bridge.imageSave(encoded)}));
+    const save = h("button",{text:"Save Image"});
+    save.addEventListener("click",async()=>{save.disabled=true;try{save.textContent=await Bridge.imageSave(encoded);}catch{save.textContent="Save failed — retry";}finally{save.disabled=false;}});
+    reply.append(h("img",{src:uri,alt:"Generated image",style:"max-width:100%;max-height:180px;object-fit:contain"}),save);
   }
   for (const source of message.sources ?? []) reply.append(h("button", {text:source.title,onclick:() => void Bridge.openUrl(source.url)}));
   for (const artifact of message.artifacts ?? []) {

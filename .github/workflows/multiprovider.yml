@@ -53,3 +53,5 @@ jobs:
         run: node --test tests/*.test.mjs
       - run: cargo test --workspace
       - run: npm run tauri build -- --no-bundle
+      - if: matrix.revision == 'candidate'
+        run: git diff -- Cargo.lock

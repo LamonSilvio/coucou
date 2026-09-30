@@ -8,6 +8,7 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public class CoucouInput {
+ [StructLayout(LayoutKind.Sequential)] public struct Point { public int x,y; }
  [StructLayout(LayoutKind.Sequential)] public struct Mouse { public int dx,dy; public uint data,flags,time; public UIntPtr extra; }
  [StructLayout(LayoutKind.Sequential)] public struct Keyboard { public ushort vk,scan; public uint flags,time; public UIntPtr extra; }
  [StructLayout(LayoutKind.Explicit)] public struct Union { [FieldOffset(0)] public Mouse mouse; [FieldOffset(0)] public Keyboard keyboard; }
@@ -16,6 +17,9 @@ public class CoucouInput {
  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x,int y);
  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr handle);
  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+ [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point point);
+ [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr handle,uint flags);
+ public static bool IsTarget(int x,int y,IntPtr target) { return GetAncestor(WindowFromPoint(new Point{x=x,y=y}),2)==target; }
  public static void Key(ushort vk,ushort scan,uint flags) { var i=new Input{type=1,union=new Union{keyboard=new Keyboard{vk=vk,scan=scan,flags=flags}}}; if(SendInput(1,new[]{i},Marshal.SizeOf(typeof(Input)))!=1) throw new Exception("Input denied"); }
  public static void MouseEvent(uint flags,int data=0) { var i=new Input{type=0,union=new Union{mouse=new Mouse{flags=flags,data=(uint)data}}}; if(SendInput(1,new[]{i},Marshal.SizeOf(typeof(Input)))!=1) throw new Exception("Input denied"); }
 }
@@ -23,16 +27,15 @@ public class CoucouInput {
 $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $action = $request.action
 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-if ($action.type -eq 'save_image') {
- $data = [Convert]::FromBase64String($action.image)
- if ($data.Length -gt 50000000 -or $data[0] -ne 137 -or $data[1] -ne 80 -or $data[2] -ne 78 -or $data[3] -ne 71) { throw 'Invalid PNG image' }
+if ($action.type -eq 'choose_image_path') {
  $dialog = New-Object System.Windows.Forms.SaveFileDialog
  $dialog.FileName = 'coucou-image.png'; $dialog.Filter = 'PNG image|*.png'; $dialog.OverwritePrompt = $true
- try { if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [System.IO.File]::WriteAllBytes($dialog.FileName,$data); [Console]::Out.Write('saved') } } finally { $dialog.Dispose() }
+ try { if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.FileName) } } finally { $dialog.Dispose() }
  exit
 }
 function Point($p) {
  if ($null -eq $p.x -or $null -eq $p.y -or $p.x -lt 0 -or $p.y -lt 0 -or $p.x -ge $bounds.Width -or $p.y -ge $bounds.Height) { throw 'Invalid coordinates' }
+ if (![CoucouInput]::IsTarget([int]$p.x,[int]$p.y,$target.MainWindowHandle)) { throw 'Coordinates target another application' }
  [CoucouInput]::SetCursorPos([int]$p.x,[int]$p.y) | Out-Null
 }
 if ($action.type -eq 'screenshot') {

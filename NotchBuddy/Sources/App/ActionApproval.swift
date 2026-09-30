@@ -113,11 +113,12 @@ final class ActionApprovalCenter {
     private static func writeAudit(_ action: ActionRequest, _ outcome: String) {
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Coucou", isDirectory: true)
         do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let url = directory.appendingPathComponent("actions-audit.jsonl")
             let row: [String: Any] = ["timestamp": ISO8601DateFormatter().string(from: Date()), "provider": action.provider, "integration": action.integration, "action": action.operation, "risk": action.risk.rawValue, "outcome": outcome]
             var data = try JSONSerialization.data(withJSONObject: row); data.append(10)
             if !FileManager.default.fileExists(atPath: url.path) { FileManager.default.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]) }
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             let file = try FileHandle(forWritingTo: url); defer { try? file.close() }
             try file.seekToEnd(); try file.write(contentsOf: data)
         } catch { /* No sensitive error details are logged. */ }

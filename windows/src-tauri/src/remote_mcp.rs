@@ -2,7 +2,7 @@ use serde::{Serialize,Deserialize};
 use serde_json::{json,Value};
 use tauri::{AppHandle,Manager};
 use crate::{actions::{Action,Approvals,Risk,redact},secrets};
-#[derive(Clone,Debug,Serialize,Deserialize)]
+#[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
 pub struct Server {pub name:String,pub endpoint:String,pub enabled:bool,pub tools:Vec<String>}
 impl Server {
     pub fn valid(&self)->bool{

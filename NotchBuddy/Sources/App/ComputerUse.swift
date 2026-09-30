@@ -75,7 +75,13 @@ struct MacComputerExecutor: ComputerExecutor {
         let bounds = CGDisplayBounds(CGMainDisplayID())
         func point(_ a: [String: Any]) throws -> CGPoint {
             guard let x = a["x"] as? Double, let y = a["y"] as? Double, x >= 0, y >= 0, x < Double(CGDisplayPixelsWide(CGMainDisplayID())), y < Double(CGDisplayPixelsHigh(CGMainDisplayID())) else { throw OpenAIError.message("Computer coordinates outside primary display.") }
-            return CGPoint(x: x * bounds.width / Double(CGDisplayPixelsWide(CGMainDisplayID())), y: y * bounds.height / Double(CGDisplayPixelsHigh(CGMainDisplayID())))
+            let point = CGPoint(x: x * bounds.width / Double(CGDisplayPixelsWide(CGMainDisplayID())), y: y * bounds.height / Double(CGDisplayPixelsHigh(CGMainDisplayID())))
+            let system = AXUIElementCreateSystemWide(); var hit: AXUIElement?; var pid: pid_t = 0
+            guard AXUIElementCopyElementAtPosition(system, Float(point.x), Float(point.y), &hit) == .success, let hit,
+                  AXUIElementGetPid(hit, &pid) == .success, pid == NSWorkspace.shared.frontmostApplication?.processIdentifier else {
+                throw OpenAIError.message("Computer coordinates do not target the configured browser; action blocked.")
+            }
+            return point
         }
         if ["move", "click", "double_click"].contains(type) {
             let p = try point(action)
@@ -97,6 +103,8 @@ struct MacComputerExecutor: ComputerExecutor {
             let codes: [String: CGKeyCode] = ["ENTER":36,"TAB":48,"ESC":53,"ESCAPE":53,"BACKSPACE":51,"ARROWUP":126,"ARROWDOWN":125,"ARROWLEFT":123,"ARROWRIGHT":124]
             for key in action["keys"] as? [String] ?? [] { guard let code = codes[key.uppercased()] else { throw OpenAIError.message("Unsupported key.") }; CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true)?.post(tap: .cghidEventTap); CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: false)?.post(tap: .cghidEventTap) }
         } else if type == "scroll" {
+            let p = try point(action)
+            CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
             let x = max(-2000, min(2000, action["scroll_x"] as? Int ?? 0)), y = max(-2000, min(2000, action["scroll_y"] as? Int ?? 0))
             CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: Int32(-y), wheel2: Int32(-x), wheel3: 0)?.post(tap: .cghidEventTap)
         } else if type == "drag" {

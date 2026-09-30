@@ -99,6 +99,64 @@ final class ActionTests: XCTestCase {
     func testStripeCriticalAndMock() async throws { XCTAssertEqual(action("a","stripe","refund").risk,.critical);try await writeMock("stripe","refund",["payment_intent":"pi_fake","amount":100]) }
     func testCalComWriteMock() async throws { try await writeMock("calcom","create_booking",["start":"2027-01-01T10:00:00Z","eventTypeId":1,"attendee":["name":"Test","email":"test@example.com","timeZone":"UTC"]]) }
     func testExternalURLInjectionRejected() { XCTAssertThrowsError(try ExternalPlan.build(integration:"github",operation:"create_issue",parameters:["owner":"..","repo":"repo","title":"x","body":"x"],id:"test")) }
+    func testLegacyClaudeAlwaysAndCodexDenyShareQueue() {
+        var shown:[String]=[],decisions:[String]=[]
+        let c=ActionApprovalCenter(present:{shown.append($0.id)},available:{true},clear:{_ in AppState.shared.pendingApproval=nil},audit:{_,_ in})
+        let a=action("claude","claudeCode","Bash"),b=action("codex","codex","agent_action")
+        c.enqueueLegacy(a,info:ApprovalInfo(sessionId:"s",tool:"Bash",command:"echo test",provider:"claudeCode",requestID:a.id)){decisions.append($0)}
+        c.enqueueLegacy(b,info:ApprovalInfo(sessionId:"s",tool:"Codex",command:"diff",provider:"actions",requestID:b.id)){decisions.append($0)}
+        c.resolve(b.id,allow:true);XCTAssertTrue(decisions.isEmpty)
+        c.resolve(a.id,decision:"always");c.resolve(b.id,allow:false)
+        XCTAssertEqual(decisions,["always","deny"]);XCTAssertTrue(c.queue.isEmpty);AppState.shared.pendingApproval=nil
+    }
+    func testMCPSecureStoreRoundTrip() {
+        let name="mcp-token-"+UUID().uuidString.replacingOccurrences(of:"-",with:"")
+        defer{KeychainStore.shared.remove(name)}
+        XCTAssertTrue(KeychainStore.shared.set(name,value:"mock-mcp-credential"));XCTAssertEqual(KeychainStore.shared.get(name),"mock-mcp-credential")
+    }
+    func testMCPResponsesContinuationMock() async throws {
+        let suite="mcp-chat-"+UUID().uuidString,defaults=UserDefaults(suiteName:suite)!;defer{defaults.removePersistentDomain(forName:suite)}
+        defaults.set(#"[{"name":"example","endpoint":"https://example.com/mcp","enabled":true,"tools":["search"]}]"#,forKey:"mcpServers")
+        var bodies:[[String:Any]]=[]
+        let service=OpenAIService(settings:defaults,keyProvider:{"test-credential"},approvals:center(true),transport:{request in
+            let body=try JSONSerialization.jsonObject(with:request.httpBody!) as! [String:Any];bodies.append(body)
+            if bodies.count==2 { XCTAssertEqual((body["input"] as? [[String:Any]])?.last?["approve"] as? Bool,true) }
+            let output:[[String:Any]]=bodies.count==1 ? [["type":"mcp_list_tools","server_label":"example","tools":[["name":"search"]]],["type":"mcp_approval_request","id":"mcp_continuation","server_label":"example","name":"search","arguments":"{}"]] : [["type":"mcp_call","id":"mcp_call_result","server_label":"example","name":"search","output":"Untrusted result"],["type":"message","role":"assistant","content":[["type":"output_text","text":"Answer"]]]]
+            return(try JSONSerialization.data(withJSONObject:["status":"completed","output":output]),HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:nil)!)
+        })
+        await service.chat(query:"List and use MCP search",context:nil,state:AppState.shared);XCTAssertEqual(bodies.count,2)
+        XCTAssertEqual((bodies.first?["tools"] as? [[String:Any]])?.first?["require_approval"] as? String,"always");XCTAssertFalse(service.history.isEmpty)
+    }
+    func testComputerResponsesContinuationMock() async throws {
+        let suite="computer-chat-"+UUID().uuidString,defaults=UserDefaults(suiteName:suite)!;defer{defaults.removePersistentDomain(forName:suite)}
+        defaults.set("gpt-6.1-sol",forKey:"openaiModel");defaults.set(true,forKey:"openaiComputer")
+        let fake=FakeComputer(image:png());var bodies:[[String:Any]]=[]
+        let service=OpenAIService(settings:defaults,keyProvider:{"test-credential"},approvals:center(true),computerExecutor:fake,transport:{request in
+            let body=try JSONSerialization.jsonObject(with:request.httpBody!) as! [String:Any];bodies.append(body)
+            if bodies.count==2 { XCTAssertEqual((body["input"] as? [[String:Any]])?.last?["type"] as? String,"computer_call_output") }
+            let output:[[String:Any]]=bodies.count==1 ? [["type":"computer_call","call_id":"computer_chat_mock","actions":[["type":"click","x":1,"y":2]]]] : [["type":"message","role":"assistant","content":[["type":"output_text","text":"Done"]]]]
+            return(try JSONSerialization.data(withJSONObject:["status":"completed","output":output]),HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:nil)!)
+        })
+        await service.chat(query:"Use configured browser",context:nil,state:AppState.shared);XCTAssertEqual(bodies.count,2);XCTAssertEqual(fake.executions,1);XCTAssertEqual(fake.captures,1)
+    }
+    func testSearchAndInterpreterRegressionMock() async throws {
+        let suite="tools-regression-"+UUID().uuidString,defaults=UserDefaults(suiteName:suite)!;defer{defaults.removePersistentDomain(forName:suite)}
+        defaults.set(true,forKey:"openaiWebSearch");defaults.set(true,forKey:"openaiCodeInterpreter")
+        let service=OpenAIService(settings:defaults,keyProvider:{"test-credential"},transport:{request in
+            let body=try JSONSerialization.jsonObject(with:request.httpBody!) as! [String:Any]
+            XCTAssertEqual((body["tools"] as? [[String:Any]])?.count,2)
+            let output:[[String:Any]]=[["type":"message","role":"assistant","content":[["type":"output_text","text":"Answer","annotations":[["type":"url_citation","url":"https://example.com","title":"Source"],["type":"container_file_citation","container_id":"cntr_mock","file_id":"file_mock","filename":"chart.png"]]]]]]
+            return(try JSONSerialization.data(withJSONObject:["status":"completed","output":output]),HTTPURLResponse(url:request.url!,statusCode:200,httpVersion:nil,headerFields:nil)!)
+        })
+        await service.chat(query:"Search and plot",context:nil,state:AppState.shared)
+        XCTAssertEqual(AppState.shared.chatHistory.last?.sources.count,1);XCTAssertEqual(AppState.shared.chatHistory.last?.artifacts.count,1)
+    }
+    func testDroppedImageVisionAndEditRegression() throws {
+        let url=FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString+".png");defer{try? FileManager.default.removeItem(at:url)}
+        try Data(base64Encoded:png())!.write(to:url)
+        XCTAssertEqual(try OpenAIService.fileBlock(url,name:"image.png",vision:true)["type"] as? String,"input_image")
+        XCTAssertThrowsError(try OpenAIService.fileBlock(url,name:"image.png",vision:false))
+    }
     func testImageChatMultiTurnMock() async throws {
         let suite="image-test-"+UUID().uuidString,defaults=UserDefaults(suiteName:suite)!;defer{defaults.removePersistentDomain(forName:suite)}
         defaults.set(true,forKey:"openaiImages");let image=png();var bodies:[[String:Any]]=[]

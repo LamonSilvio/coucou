@@ -5,9 +5,9 @@ import { Sound } from "../core/sound";
 import type { Island } from "./island";
 
 let queue: ApprovalQueue | undefined;
-export function enqueueApproval(info: ApprovalInfo, finish: (allow: boolean) => void) {
-  if (State.paused || !queue) { finish(false); return; }
-  queue.enqueue(info, finish);
+export function enqueueApproval(info: ApprovalInfo, finish: (allow: boolean, reason: string) => void) {
+  if (State.paused || !queue) { finish(false, "cancel"); return; }
+  queue.enqueue(info, finish, info.provider === "claudeCode" ? 107_000 : 109_000);
 }
 export function resolveApproval(id: string, allow: boolean, notify = true) { return queue?.resolve(id, allow, notify); }
 export function registerApprovalHandlers(island: Island) {

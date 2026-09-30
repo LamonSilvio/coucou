@@ -27,13 +27,21 @@ enum RemoteMCP {
             return "\(item["server_label"] as? String ?? "MCP"): \(names.joined(separator: ", "))" + (item["error"] == nil ? "" : " — connection failed")
         }.joined(separator: "\n")
     }
+    @MainActor static func auditResults(_ output: [[String: Any]], servers: [RemoteMCPServer], approvals: ActionApprovalCenter) {
+        for item in output where item["type"] as? String == "mcp_call" {
+            guard let server = item["server_label"] as? String, let tool = item["name"] as? String,
+                  servers.contains(where: { $0.name == server && $0.tools.contains(tool) }) else { continue }
+            let action = ActionRequest(id: item["id"] as? String ?? "mcp-result", provider: "openai", integration: "mcp", operation: server + "." + tool, parameters: [:], risk: .critical)
+            approvals.record(action, outcome: item["error"] == nil || item["error"] is NSNull ? "success" : "failure")
+        }
+    }
     @MainActor static func approval(_ item: [String: Any], servers: [RemoteMCPServer], approvals: ActionApprovalCenter = .shared) async -> [String: Any] {
         let id = item["id"] as? String ?? ""
         let server = item["server_label"] as? String ?? ""
         let tool = item["name"] as? String ?? ""
         let raw = item["arguments"] as? String ?? "{}"
         var allowed = false
-        if !id.isEmpty, servers.contains(where: { $0.name == server && $0.tools.contains(tool) }), SecretRedaction.text(raw) == raw,
+        if !id.isEmpty, servers.contains(where: { $0.enabled && $0.name == server && $0.tools.contains(tool) }), SecretRedaction.text(raw) == raw,
            let data = raw.data(using: .utf8), let args = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             allowed = await approvals.authorize(ActionRequest(id: id, provider: "openai", integration: "mcp", operation: tool, parameters: ["server": server, "tool": tool, "arguments": args], risk: .critical))
         }

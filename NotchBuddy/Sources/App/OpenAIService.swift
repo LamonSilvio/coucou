@@ -53,16 +53,17 @@ final class OpenAIService: AIProvider {
     private var lastContext: String?
     private var artifacts: [String: AIArtifact] = [:]
     private var busy = false
+    private var resetPending = false
     private var cancelled = false
     private var activeSession: URLSession?
     func cancel() { cancelled = true; activeSession?.invalidateAndCancel(); approvals.cancelAll() }
-    func clearConversation() { if !busy { history = []; artifacts = [:]; lastContext = nil } }
+    func clearConversation() { if busy { resetPending = true } else { history = []; artifacts = [:]; lastContext = nil } }
 
     func chat(query: String, context: PromptContext?, state: AppState) async {
         guard !busy else { return }
         busy = true
         cancelled = false
-        defer { busy = false; state.activeAITool = nil }
+        defer { busy = false; state.activeAITool = nil; if resetPending { resetPending = false; clearConversation() } }
         do {
             guard let key = keyProvider(), !key.isEmpty else {
                 throw OpenAIError.message("OpenAI API key missing. Configure it in Settings.")
@@ -146,6 +147,7 @@ final class OpenAIService: AIProvider {
                 guard result["status"] as? String == "completed", let current = result["output"] as? [[String: Any]] else {
                     throw OpenAIError.message("OpenAI response incomplete or failed. Try a higher output limit.")
                 }
+                RemoteMCP.auditResults(current, servers: servers, approvals: approvals)
                 staged += Self.replay(current)
                 let calls = current.filter { ["function_call", "mcp_approval_request", "computer_call"].contains($0["type"] as? String ?? "") }
                 if calls.isEmpty { output = current; break }

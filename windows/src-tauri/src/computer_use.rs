@@ -31,7 +31,7 @@ impl Executor for WindowsComputerExecutor {
                 if !status.success()||bytes.len()>28_000_000{return Err("Computer action blocked or failed. Verify target, permissions and focused field.".into())}
                 return String::from_utf8(bytes).map_err(|_|"Invalid screenshot encoding.".into())
             }
-            let limit=if action["type"]=="save_image"{600}else{15};
+            let limit=if action["type"]=="choose_image_path"{600}else{15};
             if start.elapsed()>std::time::Duration::from_secs(limit){let _=process.kill();let _=process.wait();return Err("Computer executor timed out.".into())}
             std::thread::sleep(std::time::Duration::from_millis(50));
         }

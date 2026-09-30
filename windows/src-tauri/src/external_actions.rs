@@ -35,7 +35,8 @@ pub async fn execute(app:&AppHandle,args:&str,id:&str,settings:&Settings)->Strin
         if !settings.active_integrations.contains(&format!("integration_{integration}")){return Err("Enable integration in Settings.")}
         let params:Value=serde_json::from_str(a["parameters"].as_str().ok_or("Missing parameters.")?).map_err(|_|"Invalid parameters.")?;
         let p=plan(integration,operation,&params,&settings.n8n_webhook).map_err(|_|"Unsupported action parameters.")?;
-        let action=Action{id:id.into(),provider:"openai".into(),integration:integration.into(),operation:operation.into(),parameters:params,risk:risk(integration,operation)};
+        let mut preview=params;preview["destination"]=json!(p.url);preview["method"]=json!(p.method);
+        let action=Action{id:id.into(),provider:"openai".into(),integration:integration.into(),operation:operation.into(),parameters:preview,risk:risk(integration,operation)};
         let approvals=app.state::<Approvals>();
         if !approvals.authorize(app,action.clone()).await || !approvals.claim_execution(id){return Err("Action denied, expired or already executed.")}
         let result=send(p,id).await;audit(&action,if result.is_ok(){"success"}else{"failure"});result

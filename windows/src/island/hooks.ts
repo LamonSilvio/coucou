@@ -240,8 +240,9 @@ function handleHook(island: Island, payload: HookPayload) {
         sessionId: payload.session_id ?? "",
         tool,
         command: approvalTarget(tool, input),
-      }, allow => {
-        void Bridge.approvalDecision(requestId, allow ? "allow" : "deny");
+      }, (allow, reason) => {
+        if (reason === "decision") void Bridge.approvalDecision(requestId, allow ? "allow" : "deny");
+        else void Bridge.approvalDecline(requestId);
         State.updateTask(CLAUDE_ID, "working"); State.setPillBadge(CLAUDE_ID, null);
       });
       // The relay's short ack window closes in 800 ms; everything below this

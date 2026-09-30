@@ -67,4 +67,9 @@ mod tests {
         entry.delete_credential().unwrap();
         assert!(entry.get_password().is_err());
     }
+    #[test] fn mcp_dynamic_account_round_trip() {
+        let account=format!("mcp-token-test{}",std::process::id());
+        set(&account,"mock-mcp-credential").unwrap();assert_eq!(get(&account).as_deref(),Some("mock-mcp-credential"));clear(&account).unwrap();assert!(get(&account).is_none());
+        assert!(entry("mcp-token-../../anthropic-api-key").is_none());
+    }
 }

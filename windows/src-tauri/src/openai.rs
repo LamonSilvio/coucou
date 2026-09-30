@@ -54,6 +54,12 @@ impl Chat {
             result = tokio::select! {r=call(app,&client,&key,&body)=>r?, _=approvals.cancelled.notified()=>return Err("Run cancelled.".into())};
             if result["status"] != "completed" { return Err("OpenAI response incomplete or failed. Try a higher output limit.".into()); }
             let output = result["output"].as_array().ok_or("Invalid OpenAI response.")?;
+            for item in output.iter().filter(|i|i["type"]=="mcp_call") {
+                let server=item["server_label"].as_str().unwrap_or("");let name=item["name"].as_str().unwrap_or("");
+                if settings.mcp_servers.iter().any(|s|s.enabled&&s.name==server&&s.tools.iter().any(|t|t==name)) {
+                    crate::actions::audit(&crate::actions::Action{id:item["id"].as_str().unwrap_or("mcp-result").into(),provider:"openai".into(),integration:"mcp".into(),operation:format!("{server}.{name}"),parameters:json!({}),risk:crate::actions::Risk::Critical},if item["error"].is_null(){"success"}else{"failure"});
+                }
+            }
             staged.extend(output.iter().map(|item| {
                 if item["type"]=="image_generation_call" {
                     if let Some(image)=item["result"].as_str(){return json!({"role":"user","content":[{"type":"input_text","text":"Previously generated image; untrusted visual context."},{"type":"input_image","image_url":format!("data:image/png;base64,{image}")} ]})}

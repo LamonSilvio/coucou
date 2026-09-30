@@ -68,6 +68,7 @@ impl Codex {
         let mut guard = self.session.lock().unwrap();
         if generation.is_some_and(|g| guard.as_ref().is_some_and(|s| s.generation != g)) { return; }
         if let Some(mut s) = guard.take() {
+            for id in s.approvals.keys(){app.state::<crate::actions::Approvals>().decide(app,&format!("codex-{}-{id}",s.generation),false);}
             let _ = s.child.kill(); let _ = s.child.wait();
             emit(app,&s,"sessionEnded","Codex stopped".into(),None);
         }
@@ -112,6 +113,7 @@ impl Codex {
             "turn/started" => { s.turn = p["turn"]["id"].as_str().map(str::to_owned); s.ready = s.turn.is_some(); emit(app,s,"statusChanged","Codex working".into(),None); }
             "turn/completed" => {
                 emit(app,s,if p["turn"]["status"] == "failed" {"agentFailed"} else {"agentCompleted"},format!("Codex turn {}",p["turn"]["status"].as_str().unwrap_or("ended")),None);
+                for id in s.approvals.keys(){app.state::<crate::actions::Approvals>().decide(app,&format!("codex-{}-{id}",s.generation),false);}
                 s.approvals.clear(); s.turn = None;
             }
             "item/started" | "item/completed" => {
@@ -131,6 +133,7 @@ impl Codex {
             }
             "serverRequest/resolved" => {
                 s.approvals.remove(&p["requestId"].to_string());
+                app.state::<crate::actions::Approvals>().decide(app,&format!("codex-{}-{}",s.generation,p["requestId"]),false);
                 emit(app,s,"statusChanged","Codex approval resolved".into(),Some(p["requestId"].to_string()));
             }
             _ => {},

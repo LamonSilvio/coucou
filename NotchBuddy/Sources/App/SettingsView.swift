@@ -136,7 +136,7 @@ struct SettingsView: View {
                             let defaults = UserDefaults(suiteName: "Coucou.MCP.validation")!
                             defer { defaults.removePersistentDomain(forName: "Coucou.MCP.validation") }
                             defaults.set(mcpJSON, forKey: "mcpServers")
-                            do { _ = try RemoteMCP.servers(defaults); UserDefaults.standard.set(mcpJSON, forKey: "mcpServers"); AIChatRouter.shared.reset(); statusMessage = "MCP configuration saved." }
+                            do { _ = try RemoteMCP.servers(defaults); OpenAIService.shared.cancel(); OpenAIService.shared.clearConversation(); UserDefaults.standard.set(mcpJSON, forKey: "mcpServers"); AIChatRouter.shared.reset(); statusMessage = "MCP configuration saved." }
                             catch { statusMessage = "Invalid MCP configuration; consult docs/MCP.md." }
                         }
                         TextField("Server name for token", text: $mcpName)
@@ -148,7 +148,7 @@ struct SettingsView: View {
                                 mcpToken = ""
                             }
                             Button("Remove MCP token") { if OpenAIService.safeID(mcpName) { KeychainStore.shared.remove("mcp-token-" + mcpName) }; mcpToken = "" }
-                            Button("Disconnect / cancel") { OpenAIService.shared.cancel(); AIChatRouter.shared.reset() }
+                            Button("Disconnect / cancel") { OpenAIService.shared.cancel(); OpenAIService.shared.clearConversation(); AIChatRouter.shared.reset() }
                         }
                         Text("Discovery: ask ‘List tools available from my MCP servers’. Reconnect happens on the next Responses request. Disable a server and save to stop future access.").font(.caption)
                     }.padding(6)
@@ -483,6 +483,10 @@ struct SettingsView: View {
             .padding(20)
         }
         .frame(width: 480, height: 720)
+        .onChange(of: openaiComputer) { _, _ in OpenAIService.shared.cancel() }
+        .onChange(of: openaiWrites) { _, _ in OpenAIService.shared.cancel() }
+        .onChange(of: openaiModel) { _, _ in OpenAIService.shared.cancel() }
+        .onChange(of: computerTarget) { _, _ in OpenAIService.shared.cancel() }
     }
 
     // MARK: - Actions

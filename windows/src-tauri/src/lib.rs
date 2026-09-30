@@ -72,13 +72,15 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
 #[tauri::command]
 fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) -> Result<(), String> {
     crate::remote_mcp::validate(&settings.mcp_servers)?;
-    let (screen_changed, autostart_changed) = {
+    let (screen_changed, autostart_changed, tools_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen;
         let autostart_changed = current.autostart != settings.autostart;
+        let tools_changed = current.ai_provider != settings.ai_provider || current.openai_model != settings.openai_model || current.openai_computer != settings.openai_computer || current.openai_writes != settings.openai_writes || current.mcp_servers != settings.mcp_servers || current.computer_target != settings.computer_target || current.n8n_webhook != settings.n8n_webhook;
         *current = settings.clone();
-        (screen_changed, autostart_changed)
+        (screen_changed, autostart_changed, tools_changed)
     };
+    if tools_changed { app.state::<actions::Approvals>().cancel(&app); }
     if let Err(err) = settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
     }
@@ -262,11 +264,11 @@ fn action_decide(app: AppHandle, approvals:State<actions::Approvals>, id:String,
 fn action_cancel(app:AppHandle,approvals:State<actions::Approvals>){approvals.cancel(&app);}
 #[tauri::command]
 async fn image_save(image:String)->Result<String,String>{
-    if image.len()>68_000_000{return Err("Image exceeds size limit.".into())}
-    let bytes=image_workflow::decode(&image)?;
-    if !bytes.starts_with(&[137,80,78,71,13,10,26,10]){return Err("Invalid PNG image.".into())}
     use computer_use::Executor;
-    tauri::async_runtime::spawn_blocking(move||computer_use::WindowsComputerExecutor{target:"msedge".into()}.execute(&serde_json::json!({"type":"save_image","image":image}))).await.map_err(|_|"Image save failed.".to_string())?
+    tauri::async_runtime::spawn_blocking(move||image_workflow::save_with(&image,||{
+        let path=computer_use::WindowsComputerExecutor{target:"msedge".into()}.execute(&serde_json::json!({"type":"choose_image_path"}))?;
+        Ok(if path.is_empty(){None}else{Some(std::path::PathBuf::from(path))})
+    })).await.map_err(|_|"Image save failed.".to_string())?
 }
 #[tauri::command]
 fn codex_decide(app: AppHandle, codex: State<codex::Codex>, request_id: String, allow: bool) -> Result<(),String> {

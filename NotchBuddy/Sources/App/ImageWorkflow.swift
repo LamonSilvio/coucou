@@ -17,15 +17,21 @@ enum ImageWorkflow {
     static func parse(_ output: [[String: Any]]) throws -> [String] {
         try output.filter { $0["type"] as? String == "image_generation_call" }.map { item in
             guard item["status"] as? String == "completed", let encoded = item["result"] as? String, encoded.count <= 68_000_000,
-                  let data = Data(base64Encoded: encoded), data.count <= 50_000_000, data.starts(with: [137,80,78,71,13,10,26,10]), NSImage(data: data) != nil else { throw OpenAIError.message("Invalid or oversized generated PNG image.") }
+                  let data = Data(base64Encoded: encoded), validPNG(data), NSImage(data: data) != nil else { throw OpenAIError.message("Invalid or oversized generated PNG image.") }
             return encoded
         }
+    }
+    static func validPNG(_ data: Data) -> Bool {
+        guard data.count >= 45, data.count <= 50_000_000, data.starts(with: [137,80,78,71,13,10,26,10]), Array(data[12..<16]) == [73,72,68,82], data.suffix(12) == Data([0,0,0,0,73,69,78,68,174,66,96,130]) else { return false }
+        let width = data[16..<20].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+        let height = data[20..<24].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+        return width > 0 && height > 0 && width <= 16384 && height <= 16384 && width * height <= 32_000_000
     }
     @MainActor @discardableResult static func save(_ encoded: String, chooseURL: () -> URL? = {
         let panel = NSSavePanel(); panel.nameFieldStringValue = "coucou-image.png"
         return panel.runModal() == .OK ? panel.url : nil
     }) -> Bool {
-        guard let data = Data(base64Encoded: encoded), data.count <= 50_000_000, data.starts(with: [137,80,78,71,13,10,26,10]), NSImage(data: data) != nil, let url = chooseURL() else { return false }
+        guard let data = Data(base64Encoded: encoded), validPNG(data), NSImage(data: data) != nil, let url = chooseURL() else { return false }
         do { try data.write(to: url, options: .atomic); return true }
         catch { AppState.shared.noteMessage = "Could not save image."; AppState.shared.view = .note; return false }
     }

@@ -50,7 +50,10 @@ enum ExternalActions {
                   let integration = args["integration"], let operation = args["operation"], let encoded = args["parameters"]?.data(using: .utf8), let parameters = try JSONSerialization.jsonObject(with: encoded) as? [String: Any],
                   state.activeIntegrations.contains("integration_" + integration) else { throw OpenAIError.message("Integration unavailable.") }
             let plan = try ExternalPlan.build(integration: integration, operation: operation, parameters: parameters, webhook: settings.string(forKey: "n8nWebhook") ?? "", id: id)
-            let action = ActionRequest(id: id, provider: "openai", integration: integration, operation: operation, parameters: parameters, risk: ActionRiskEvaluator.risk(integration: integration, operation: operation))
+            var preview = parameters
+            preview["destination"] = plan.request.url!.absoluteString
+            preview["method"] = plan.request.httpMethod ?? ""
+            let action = ActionRequest(id: id, provider: "openai", integration: integration, operation: operation, parameters: preview, risk: ActionRiskEvaluator.risk(integration: integration, operation: operation))
             return await approvals.execute(action) {
                 var request = plan.request
                 guard let key = keyProvider(plan.key), !key.isEmpty else { throw OpenAIError.message("Missing integration credential.") }

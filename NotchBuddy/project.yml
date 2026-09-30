@@ -55,6 +55,8 @@ targets:
         buildPhase: resources
       - path: Resources/OpenAIModels.json
         buildPhase: resources
+      - path: Resources/ExternalActions.json
+        buildPhase: resources
       - path: Resources/sounds
         buildPhase: resources
         type: folder
@@ -91,6 +93,8 @@ targets:
       - path: Assets.xcassets
         buildPhase: resources
       - path: Resources/OpenAIModels.json
+        buildPhase: resources
+      - path: Resources/ExternalActions.json
         buildPhase: resources
       - path: Resources/sounds
         buildPhase: resources

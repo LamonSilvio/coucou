@@ -19,6 +19,11 @@ function bubble(message: ChatMessage): HTMLElement {
     );
   }
   const reply = h("div", {class:"reply"},h("div", {text:(message.provider ? message.provider + " · " : "") + message.content}));
+  for (const encoded of message.images ?? []) {
+    const uri="data:image/png;base64,"+encoded;
+    reply.append(h("img",{src:uri,alt:"Generated image",style:"max-width:100%;max-height:180px;object-fit:contain"}),
+      h("button",{text:"Save Image",onclick:()=>void Bridge.imageSave(encoded)}));
+  }
   for (const source of message.sources ?? []) reply.append(h("button", {text:source.title,onclick:() => void Bridge.openUrl(source.url)}));
   for (const artifact of message.artifacts ?? []) {
     const button = h("button", {text:`Save ${artifact.filename}`});
@@ -58,7 +63,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     spellcheck: "false",
   }) as HTMLInputElement;
   const send = h("button", { class: "send-btn", title: "Send" }, svg(ICONS.arrowUp, 11));
-  const bar = h("div", { class: "chat-bar" }, input, send);
+  const bar = h("div", { class: "chat-bar" }, input, send,h("button",{text:"Cancel",onclick:()=>void Bridge.actionCancel()}));
 
   const el = h(
     "div",
@@ -94,7 +99,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
     try {
       const reply = await Bridge.chatSend(query, context);
-      State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text, provider: reply.provider, sources: reply.sources, artifacts: reply.artifacts });
+      State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text, provider: reply.provider, sources: reply.sources, artifacts: reply.artifacts,images:reply.images });
       State.stateOverride = null;
       Sound.play("finish");
     } catch (err) {

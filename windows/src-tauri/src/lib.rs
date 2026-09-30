@@ -2,6 +2,11 @@
 
 mod tool_manager;
 mod codex;
+mod actions;
+mod external_actions;
+mod remote_mcp;
+mod image_workflow;
+mod computer_use;
 mod ai;
 mod openai;
 mod claude;
@@ -65,7 +70,8 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
+fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) -> Result<(), String> {
+    crate::remote_mcp::validate(&settings.mcp_servers)?;
     let (screen_changed, autostart_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen;
@@ -89,6 +95,7 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
     }
     // Keep the other window in step (island ⇄ settings window).
     let _ = app.emit("settings-changed", settings);
+    Ok(())
 }
 
 /// Hidden island → shrink the window to the invisible wake strip and park the
@@ -250,6 +257,18 @@ fn codex_start(app: AppHandle, codex: State<codex::Codex>, binary: String, cwd: 
 #[tauri::command]
 fn codex_stop(app: AppHandle, codex: State<codex::Codex>) { codex.close(&app,None); }
 #[tauri::command]
+fn action_decide(app: AppHandle, approvals:State<actions::Approvals>, id:String, allow:bool){approvals.decide(&app,&id,allow);}
+#[tauri::command]
+fn action_cancel(app:AppHandle,approvals:State<actions::Approvals>){approvals.cancel(&app);}
+#[tauri::command]
+async fn image_save(image:String)->Result<String,String>{
+    if image.len()>68_000_000{return Err("Image exceeds size limit.".into())}
+    let bytes=image_workflow::decode(&image)?;
+    if !bytes.starts_with(&[137,80,78,71,13,10,26,10]){return Err("Invalid PNG image.".into())}
+    use computer_use::Executor;
+    tauri::async_runtime::spawn_blocking(move||computer_use::WindowsComputerExecutor{target:"msedge".into()}.execute(&serde_json::json!({"type":"save_image","image":image}))).await.map_err(|_|"Image save failed.".to_string())?
+}
+#[tauri::command]
 fn codex_decide(app: AppHandle, codex: State<codex::Codex>, request_id: String, allow: bool) -> Result<(),String> {
     codex.decide(&app,&request_id,allow)
 }
@@ -404,6 +423,7 @@ pub fn run() {
         .manage(Pending::default())
         .manage(Chat::default())
         .manage(codex::Codex::default())
+        .manage(actions::Approvals::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -422,6 +442,8 @@ pub fn run() {
             approval_decline,
             log_line,
             codex_start, codex_stop, codex_decide,
+            action_decide, action_cancel,
+            image_save,
             openai_download_artifact,
             chat_send,
             chat_reset,

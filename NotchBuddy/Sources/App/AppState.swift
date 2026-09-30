@@ -445,6 +445,7 @@ struct ChatMessage: Identifiable {
     var provider: String = "Claude"
     var sources: [AISource] = []
     var artifacts: [AIArtifact] = []
+    var images: [String] = []
 }
 
 struct AISource: Identifiable {

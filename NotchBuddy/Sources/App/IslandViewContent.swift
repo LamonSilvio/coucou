@@ -199,7 +199,7 @@ struct ApprovalView: View {
             CardBackground(wash: .amber)
             VStack(alignment: .leading, spacing: 5) {
                 AgentWho(task: state.focusTask, label: "needs permission")
-                if approval?.provider == "codex" {
+                if ["codex", "actions"].contains(approval?.provider ?? "") {
                     ScrollView { Text(approval?.command ?? "…").font(.system(size: 11, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 55)
                 } else { CodeBlock(text: approval?.command ?? approval?.tool ?? "…") }
                 HStack(spacing: 8) {
@@ -209,7 +209,7 @@ struct ApprovalView: View {
                     PrimaryButton("Allow") {
                         decide("allow")
                     }
-                    if approval?.provider != "codex" {
+                    if approval?.provider == "claudeCode" {
                         SecondaryButton("Always") { HookServer.shared.sendApprovalDecision("always") }
                     }
                 }
@@ -221,7 +221,9 @@ struct ApprovalView: View {
         }
     }
     private func decide(_ decision: String) {
-        if let approval, approval.provider == "codex" {
+        if let approval, approval.provider == "actions" {
+            ActionApprovalCenter.shared.resolve(approval.requestID, allow: decision == "allow")
+        } else if let approval, approval.provider == "codex" {
             CodexAdapter.shared.decide(decision, requestID: approval.requestID)
         } else { HookServer.shared.sendApprovalDecision(decision) }
     }
@@ -769,6 +771,9 @@ struct PromptView: View {
 
                 Text(state.activeAITool ?? AIChatRouter.shared.label)
                     .font(.system(size: 10)).foregroundColor(.secondary)
+                if state.stateOverride != nil && AIChatRouter.shared.label == "OpenAI" {
+                    Button("Cancel OpenAI run") { OpenAIService.shared.cancel() }.font(.caption)
+                }
                 HStack(spacing: 8) {
                     TextField(state.chatHistory.isEmpty ? "Ask \(AIChatRouter.shared.label)…" : "Continue…", text: $text)
                         .textFieldStyle(.plain)
@@ -831,6 +836,12 @@ struct ChatBubble: View {
             } else {
                 VStack(alignment: .leading, spacing: 5) {
                 Text(message.provider).font(.system(size: 10, weight: .semibold)).foregroundColor(Color(hex: "#8E939C"))
+                ForEach(Array(message.images.enumerated()), id: \.offset) { _, encoded in
+                    if let data = Data(base64Encoded: encoded), let image = NSImage(data: data) {
+                        Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 180)
+                        Button("Save Image") { ImageWorkflow.save(encoded) }
+                    }
+                }
                 Text(message.content)
                     .font(.system(size: 12.5))
                     .foregroundColor(Color(hex: "#B0B5BE"))

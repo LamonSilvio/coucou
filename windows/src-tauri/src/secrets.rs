@@ -9,6 +9,7 @@ const SERVICE: &str = "fr.louisraille.coucou";
 pub const KNOWN_KEYS: &[&str] = &[
     "anthropic-api-key",
     "openai-api-key",
+    "n8n-webhook-token",
     "n8n-url",
     "n8n-api-key",
     "vercel-token",
@@ -20,7 +21,7 @@ pub const KNOWN_KEYS: &[&str] = &[
 ];
 
 fn entry(key: &str) -> Option<Entry> {
-    if !KNOWN_KEYS.contains(&key) {
+    if !KNOWN_KEYS.contains(&key) && !(key.starts_with("mcp-token-") && key[10..].len() <= 32 && crate::openai::safe_id(&key[10..])) {
         return None;
     }
     Entry::new(SERVICE, key).ok()

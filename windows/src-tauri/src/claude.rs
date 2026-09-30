@@ -69,6 +69,7 @@ pub struct ChatReply {
     pub provider: &'static str,
     pub sources: Vec<crate::openai::Source>,
     pub artifacts: Vec<crate::openai::Artifact>,
+    pub images: Vec<String>,
 }
 
 /// One chat turn. Returns the assistant's text, or a message the island shows
@@ -157,7 +158,7 @@ pub async fn send(
     if text.is_empty() {
         return Err("No response text.".into());
     }
-    Ok(ChatReply { text, provider: "Anthropic", sources: vec![], artifacts: vec![] })
+    Ok(ChatReply { text, provider: "Anthropic", sources: vec![], artifacts: vec![], images:vec![] })
 }
 
 async fn call(key: &str, body: &Value) -> Result<Value, String> {

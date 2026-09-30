@@ -22,7 +22,7 @@ export interface AgentTask {
 }
 
 export interface ApprovalInfo {
-  provider?: "claudeCode" | "codex";
+  provider?: "claudeCode" | "codex" | "actions";
   requestId: string;
   sessionId: string;
   tool: string;
@@ -36,6 +36,7 @@ export interface ChatMessage {
   provider?: string;
   sources?: {title:string;url:string}[];
   artifacts?: {containerId:string;fileId:string;filename:string}[];
+  images?: string[];
 }
 
 export type PromptContext =
@@ -99,6 +100,9 @@ export interface Settings {
   aiProvider: "anthropic" | "openai" | "auto";
   openaiModel: string; openaiReasoning: string; openaiMaxTokens: number;
   openaiWebSearch: boolean; openaiCodeInterpreter: boolean; openaiIntegrations: boolean;
+  openaiWrites:boolean; openaiImages:boolean; openaiComputer:boolean;
+  openaiImageModel:string; openaiImageSize:string; openaiImageTransparent:boolean; computerTarget:string;
+  mcpServers:{name:string;endpoint:string;enabled:boolean;tools:string[]}[]; n8nWebhook:string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -115,6 +119,7 @@ export const DEFAULT_SETTINGS: Settings = {
   model: "claude-opus-5",
   aiProvider: "anthropic", openaiModel: "", openaiReasoning: "", openaiMaxTokens: 4096,
   openaiWebSearch: false, openaiCodeInterpreter: false, openaiIntegrations: false,
+  openaiWrites:false,openaiImages:false,openaiComputer:false,openaiImageModel:"",openaiImageSize:"auto",openaiImageTransparent:false,computerTarget:"msedge",mcpServers:[],n8nWebhook:"",
 };
 
 type Listener = () => void;

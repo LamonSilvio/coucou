@@ -21,6 +21,18 @@ struct SettingsView: View {
     @AppStorage("openaiWebSearch") private var openaiWebSearch = false
     @AppStorage("openaiIntegrations") private var openaiIntegrations = false
     @AppStorage("openaiCodeInterpreter") private var openaiCodeInterpreter = false
+    @AppStorage("openaiWrites") private var openaiWrites = false
+    @AppStorage("openaiImages") private var openaiImages = false
+    @AppStorage("openaiComputer") private var openaiComputer = false
+    @AppStorage("openaiImageModel") private var openaiImageModel = ""
+    @AppStorage("openaiImageSize") private var openaiImageSize = "auto"
+    @AppStorage("openaiImageTransparent") private var openaiImageTransparent = false
+    @AppStorage("computerTarget") private var computerTarget = "com.apple.Safari"
+    @State private var mcpJSON = UserDefaults.standard.string(forKey: "mcpServers") ?? "[]"
+    @State private var mcpName = ""
+    @State private var mcpToken = ""
+    @AppStorage("n8nWebhook") private var n8nWebhook = ""
+    @State private var webhookToken = ""
     @State private var openaiKey = ""
     @AppStorage("codexBinary") private var codexBinary = ""
     @State private var codexWorkspace = ""
@@ -96,7 +108,60 @@ struct SettingsView: View {
                         Toggle("Web Search", isOn: $openaiWebSearch)
                         Toggle("Code Interpreter (API charges apply)", isOn: $openaiCodeInterpreter)
                         Toggle("Integration status tool (read only)", isOn: $openaiIntegrations)
-                        Text("Computer Use: disabled; local computer execution is unavailable. Tools require a model listed in OpenAIModels.json.").font(.caption)
+                        Toggle("External writes (every write needs approval)", isOn: $openaiWrites)
+                        Toggle("Image generation / editing (API charges apply)", isOn: $openaiImages)
+                        TextField("Image model (blank = catalog default)", text: $openaiImageModel)
+                        Picker("Image size", selection: $openaiImageSize) {
+                            ForEach(["auto", "1024x1024", "1536x1024", "1024x1536"], id: \.self) { Text($0).tag($0) }
+                        }
+                        Toggle("Transparent image background", isOn: $openaiImageTransparent)
+                        #if !APPSTORE
+                        Toggle("Computer Use — explicit consent required", isOn: $openaiComputer)
+                        Picker("Controlled browser", selection: $computerTarget) {
+                            Text("Safari").tag("com.apple.Safari"); Text("Chrome").tag("com.google.Chrome")
+                            Text("Firefox").tag("org.mozilla.firefox"); Text("Edge").tag("com.microsoft.edgemac")
+                        }
+                        Text("OFF by default. Requires a computer-capable catalog model, Accessibility and Screen Recording. Every screenshot transmission and click/type/key action needs approval. Keep secrets off the primary display.").font(.caption)
+                        #else
+                        Text("Desktop Computer Use is unavailable in the App Store sandbox.").font(.caption)
+                        #endif
+                        Text("Tools require a model listed in OpenAIModels.json. Image prompts may also use the Image generation toggle.").font(.caption)
+                    }.padding(6)
+                }
+                GroupBox("Remote MCP") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("JSON: name, endpoint (HTTPS without secrets), enabled, tools (allowlist). Tokens are stored separately in Keychain. All MCP calls require explicit approval.").font(.caption)
+                        TextEditor(text: $mcpJSON).frame(height: 100)
+                        Button("Save servers / reconnect on next chat") {
+                            let defaults = UserDefaults(suiteName: "Coucou.MCP.validation")!
+                            defer { defaults.removePersistentDomain(forName: "Coucou.MCP.validation") }
+                            defaults.set(mcpJSON, forKey: "mcpServers")
+                            do { _ = try RemoteMCP.servers(defaults); UserDefaults.standard.set(mcpJSON, forKey: "mcpServers"); AIChatRouter.shared.reset(); statusMessage = "MCP configuration saved." }
+                            catch { statusMessage = "Invalid MCP configuration; consult docs/MCP.md." }
+                        }
+                        TextField("Server name for token", text: $mcpName)
+                        SecureField("MCP authorization token", text: $mcpToken)
+                        HStack {
+                            Button("Save MCP token") {
+                                guard OpenAIService.safeID(mcpName), mcpName.count <= 32, !mcpToken.isEmpty else { statusMessage = "Invalid server name or empty token."; return }
+                                statusMessage = KeychainStore.shared.set("mcp-token-" + mcpName, value: mcpToken) ? "MCP token saved in Keychain." : "Could not save MCP token."
+                                mcpToken = ""
+                            }
+                            Button("Remove MCP token") { if OpenAIService.safeID(mcpName) { KeychainStore.shared.remove("mcp-token-" + mcpName) }; mcpToken = "" }
+                            Button("Disconnect / cancel") { OpenAIService.shared.cancel(); AIChatRouter.shared.reset() }
+                        }
+                        Text("Discovery: ask ‘List tools available from my MCP servers’. Reconnect happens on the next Responses request. Disable a server and save to stop future access.").font(.caption)
+                    }.padding(6)
+                }
+                GroupBox("n8n write workflow") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Fixed production webhook HTTPS URL (no token)", text: $n8nWebhook)
+                        SecureField("Webhook bearer token", text: $webhookToken)
+                        Button("Save webhook token") {
+                            statusMessage = KeychainStore.shared.set("n8n-webhook-token", value: webhookToken) ? "Webhook token saved in Keychain." : "Could not save webhook token."
+                            webhookToken = ""
+                        }
+                        Text("Separate from the n8n polling API key. Configure this webhook with Authorization: Bearer authentication. The model cannot choose an endpoint.").font(.caption)
                     }.padding(6)
                 }
 

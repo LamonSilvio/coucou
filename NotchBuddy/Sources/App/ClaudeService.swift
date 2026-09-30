@@ -83,7 +83,8 @@ final class KeychainStore: @unchecked Sendable {
 
     /// Thread-safe read — never touches the Keychain.
     func get(_ key: String) -> String? {
-        lock.withLock { cache[key] }
+        if key.hasPrefix("mcp-token-") || key == "n8n-webhook-token" { return Keychain.load(key: key) }
+        return lock.withLock { cache[key] }
     }
 
     /// Updates cache + persists to Keychain.

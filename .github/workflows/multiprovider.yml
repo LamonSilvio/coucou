@@ -17,8 +17,12 @@ jobs:
         with:
           ref: ${{ matrix.revision == 'baseline' && '5ae7bd946ab51493b5ddaebdc5f449f269ebb421' || github.sha }}
       - run: brew install xcodegen
+      - if: matrix.revision == 'candidate'
+        run: xcodebuild -project NotchBuddy/NotchBuddy.xcodeproj -scheme NotchBuddy -configuration Debug build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
       - run: cd NotchBuddy && xcodegen
       - run: xcodebuild -project NotchBuddy/NotchBuddy.xcodeproj -scheme NotchBuddy -configuration Debug build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+      - if: matrix.revision == 'candidate'
+        run: xcodebuild -project NotchBuddy/NotchBuddy.xcodeproj -scheme CoucouAppStore -configuration Debug build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
       - if: matrix.revision == 'candidate'
         run: xcodebuild -project NotchBuddy/NotchBuddy.xcodeproj -scheme NotchBuddy -configuration Debug test CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
       - if: matrix.revision == 'candidate'

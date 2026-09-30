@@ -65,7 +65,7 @@ impl Codex {
         let mut guard = self.session.lock().unwrap();
         let s = guard.as_mut().ok_or("Codex session ended.")?;
         let id = s.approvals.remove(request_id).ok_or("Codex approval expired or already resolved.")?;
-        send(s,json!({"id":id,"result":{"decision":if allow {"accept"} else {"decline"}}}))?;
+        send(s,json!({"id":id,"result":{"decision":decision(allow)}}))?;
         emit(app,s,"statusChanged","Codex working".into(),None);
         Ok(())
     }
@@ -127,8 +127,12 @@ impl Codex {
         if !["item/commandExecution/requestApproval","item/fileChange/requestApproval"].contains(&method) {
             let _ = send(s,json!({"id":id,"error":{"code":-32601,"message":"Unsupported client request"}})); return
         }
-        if p["threadId"].as_str() != s.thread.as_deref() || p["turnId"].as_str() != s.turn.as_deref() || !s.approvals.is_empty() {
+        if !can_approve(method,s.thread.as_deref(),s.turn.as_deref(),p) || !s.approvals.is_empty() {
             let _ = send(s,json!({"id":id,"result":{"decision":"decline"}})); return
+        }
+        if method == "item/fileChange/requestApproval" && s.proposals.get(p["itemId"].as_str().unwrap_or("")).is_none_or(|v|v.is_empty()) {
+            let _ = send(s,json!({"id":id,"result":{"decision":"decline"}}));
+            emit(app,s,"agentFailed","Codex file change has no reviewable diff. Request a smaller change.".into(),None); return
         }
         let detail = if p["networkApprovalContext"].is_object() {
             format!("Network access: {}://{}",p["networkApprovalContext"]["protocol"].as_str().unwrap_or(""),p["networkApprovalContext"]["host"].as_str().unwrap_or(""))
@@ -154,4 +158,22 @@ fn send(s: &mut Session, value: Value) -> Result<(),String> {
 }
 fn emit(app: &AppHandle, s: &Session, kind: &str, detail: String, request_id: Option<String>) {
     let _ = app.emit("agent",AgentEvent {provider:"codex".into(),session:s.thread.clone().unwrap_or_default(),kind:kind.into(),detail,request_id});
+}
+
+fn decision(allow: bool) -> &'static str { if allow {"accept"} else {"decline"} }
+fn can_approve(method: &str, thread: Option<&str>, turn: Option<&str>, params: &Value) -> bool {
+    ["item/commandExecution/requestApproval","item/fileChange/requestApproval"].contains(&method)
+        && thread.is_some() && turn.is_some() && params["threadId"].as_str() == thread && params["turnId"].as_str() == turn
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test] fn official_decisions_and_scoped_approvals() {
+        let p = json!({"threadId":"thread","turnId":"turn"});
+        assert_eq!(decision(true),"accept"); assert_eq!(decision(false),"decline");
+        assert!(can_approve("item/commandExecution/requestApproval",Some("thread"),Some("turn"),&p));
+        assert!(!can_approve("item/commandExecution/requestApproval",Some("other"),Some("turn"),&p));
+        assert!(!can_approve("item/fileChange/requestApproval",Some("thread"),None,&p));
+        assert!(!can_approve("fakeApproval",Some("thread"),Some("turn"),&p));
+    }
 }

@@ -77,7 +77,7 @@ final class CodexAdapter {
 
     func decide(_ decision: String, requestID: String) {
         guard let id = approvals.removeValue(forKey: requestID), AppState.shared.pendingApproval?.requestID == requestID else { return }
-        send(["id": id, "result": ["decision": decision == "allow" ? "accept" : "decline"]])
+        send(["id": id, "result": ["decision": CodexProtocol.decision(allow: decision == "allow")]])
         AppState.shared.pendingApproval = nil; AppState.shared.isPinned = false
         emit(.statusChanged, "Codex working")
         AppState.shared.view = .overview
@@ -150,10 +150,13 @@ final class CodexAdapter {
             send(["id": id, "error": ["code": -32601, "message": "Unsupported client request"]]); return
         }
         let state = AppState.shared
-        guard p["threadId"] as? String == threadID, p["turnId"] as? String == turnID, state.pendingApproval == nil, state.isPresent else {
+        guard CodexProtocol.canApprove(method: method, thread: threadID, turn: turnID, params: p), state.pendingApproval == nil, state.isPresent else {
             send(["id": id, "result": ["decision": "decline"]]); return
         }
         let network = p["networkApprovalContext"] as? [String: Any]
+        if method == "item/fileChange/requestApproval", (proposals[p["itemId"] as? String ?? ""] ?? "").isEmpty {
+            send(["id": id, "result": ["decision": "decline"]]); fail("Codex file change has no reviewable diff. Request a smaller change."); return
+        }
         let preview = network.map { "Network access: \($0["protocol"] as? String ?? "")://\($0["host"] as? String ?? "")" }
             ?? p["command"] as? String ?? proposals[p["itemId"] as? String ?? ""] ?? p["reason"] as? String ?? "Codex file change"
         guard preview.count <= 20000 else {

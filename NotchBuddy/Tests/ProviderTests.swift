@@ -86,4 +86,68 @@ final class ProviderTests: XCTestCase {
         XCTAssertTrue(service.history.isEmpty)
     }
 
+    func testArtifactIdentifierSafety() {
+        XCTAssertTrue(OpenAIService.safeID("cntr_123"))
+        XCTAssertFalse(OpenAIService.safeID("../credentials"))
+        XCTAssertFalse(OpenAIService.safeID("file?authorization=secret"))
+    }
+
+    func testCodexApprovalRouting() {
+        let params: [String: Any] = ["threadId": "thread", "turnId": "turn"]
+        XCTAssertEqual(CodexProtocol.decision(allow: true), "accept")
+        XCTAssertEqual(CodexProtocol.decision(allow: false), "decline")
+        XCTAssertTrue(CodexProtocol.canApprove(method: "item/commandExecution/requestApproval", thread: "thread", turn: "turn", params: params))
+        XCTAssertFalse(CodexProtocol.canApprove(method: "item/commandExecution/requestApproval", thread: "other", turn: "turn", params: params))
+        XCTAssertFalse(CodexProtocol.canApprove(method: "item/fileChange/requestApproval", thread: "thread", turn: nil, params: params))
+        XCTAssertFalse(CodexProtocol.canApprove(method: "fakeApproval", thread: "thread", turn: "turn", params: params))
+    }
+
+    func testProviderSwitchClearsBothHistories() async {
+        let claude = RecordingProvider(); let openai = RecordingProvider()
+        var selected = AIProviderID.anthropic
+        let router = AIChatRouter(providers: [.anthropic: claude, .openai: openai], selection: { selected })
+        let state = AppState.shared
+        await router.chat(query: "Claude query", context: nil, state: state)
+        XCTAssertEqual(claude.queries, ["Claude query"])
+        await router.chat(query: "Claude followup", context: nil, state: state)
+        XCTAssertEqual(claude.resets, 1)
+        selected = .openai
+        await router.chat(query: "OpenAI query", context: nil, state: state)
+        XCTAssertEqual(claude.resets, 2); XCTAssertEqual(openai.resets, 2)
+        XCTAssertEqual(openai.queries, ["OpenAI query"])
+        XCTAssertEqual(state.chatHistory.map(\.content), ["OpenAI query"])
+        router.reset(); XCTAssertTrue(state.chatHistory.isEmpty)
+    }
+
+    func testFunctionCallingAndUntrustedTools() async throws {
+        XCTAssertTrue(ToolManager.execute(name: "shell", arguments: "{}", state: AppState.shared).contains("error"))
+        XCTAssertTrue(ToolManager.execute(name: "list_integrations", arguments: #"{"url":"https://attacker.invalid"}"#, state: AppState.shared).contains("error"))
+        let suite = "coucou-test-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: "openaiIntegrations")
+        var bodies: [[String: Any]] = []
+        let service = OpenAIService(settings: defaults, keyProvider: { "unit-test-credential" }, transport: { request in
+            bodies.append(try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any])
+            let output: [[String: Any]] = bodies.count == 1
+                ? [["type": "function_call", "name": "list_integrations", "call_id": "call_123", "arguments": "{}"]]
+                : [["type": "message", "role": "assistant", "content": [["type": "output_text", "text": "answer"]]]]
+            let data = try JSONSerialization.data(withJSONObject: ["status": "completed", "output": output])
+            return (data, HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        await service.chat(query: "integrations", context: nil, state: AppState.shared)
+        XCTAssertEqual(bodies.count, 2)
+        let input = bodies.last?["input"] as? [[String: Any]]
+        XCTAssertEqual(input?.last?["type"] as? String, "function_call_output")
+        XCTAssertEqual(input?.last?["call_id"] as? String, "call_123")
+        XCTAssertEqual(service.history.count, 4)
+    }
+
+}
+
+@MainActor
+private final class RecordingProvider: AIProvider {
+    var queries: [String] = []; var resets = 0
+    func chat(query: String, context: PromptContext?, state: AppState) async { queries.append(query) }
+    func clearConversation() { resets += 1 }
 }

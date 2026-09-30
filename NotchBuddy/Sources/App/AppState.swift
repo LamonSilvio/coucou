@@ -442,4 +442,18 @@ struct ChatMessage: Identifiable {
     let id = UUID()
     let role: ChatRole
     let content: String
+    var sources: [AISource] = []
+    var artifacts: [AIArtifact] = []
+}
+
+struct AISource: Identifiable {
+    var id: String { url.absoluteString }
+    let title: String
+    let url: URL
+}
+struct AIArtifact: Identifiable, Equatable {
+    var id: String { containerID + "/" + fileID }
+    let containerID: String
+    let fileID: String
+    let filename: String
 }

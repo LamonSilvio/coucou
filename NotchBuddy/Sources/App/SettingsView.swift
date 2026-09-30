@@ -19,6 +19,7 @@ struct SettingsView: View {
     @AppStorage("openaiReasoning") private var openaiReasoning = ""
     @AppStorage("openaiMaxTokens") private var openaiMaxTokens = 4096
     @AppStorage("openaiWebSearch") private var openaiWebSearch = false
+    @AppStorage("openaiIntegrations") private var openaiIntegrations = false
     @AppStorage("openaiCodeInterpreter") private var openaiCodeInterpreter = false
     @State private var openaiKey = ""
     @AppStorage("codexBinary") private var codexBinary = ""
@@ -94,6 +95,7 @@ struct SettingsView: View {
                         Stepper("Max output tokens: \(openaiMaxTokens)", value: $openaiMaxTokens, in: 256...32768, step: 256)
                         Toggle("Web Search", isOn: $openaiWebSearch)
                         Toggle("Code Interpreter (API charges apply)", isOn: $openaiCodeInterpreter)
+                        Toggle("Integration status tool (read only)", isOn: $openaiIntegrations)
                         Text("Computer Use: disabled; local computer execution is unavailable. Tools require a model listed in OpenAIModels.json.").font(.caption)
                     }.padding(6)
                 }

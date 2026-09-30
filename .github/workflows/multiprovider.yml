@@ -2,8 +2,7 @@ name: Multi-provider validation
 on:
   push:
     branches: [feature/openai-multiprovider]
-  pull_request:
-    branches: [main]
+    paths-ignore: ["docs/**", "README.md"]
 permissions:
   contents: read
 jobs:

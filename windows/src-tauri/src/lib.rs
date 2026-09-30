@@ -1,5 +1,6 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
+mod tool_manager;
 mod codex;
 mod ai;
 mod openai;
@@ -274,6 +275,11 @@ async fn chat_reset(chat: State<'_, Chat>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn openai_download_artifact(chat: State<'_, Chat>, container: String, file: String) -> Result<String,String> {
+    chat.lock().await.download(&container,&file).await
+}
+
 /// Copies a dropped file into the inbox and reports its name back.
 #[tauri::command]
 fn ingest_file(path: String) -> Result<DroppedFile, String> {
@@ -416,6 +422,7 @@ pub fn run() {
             approval_decline,
             log_line,
             codex_start, codex_stop, codex_decide,
+            openai_download_artifact,
             chat_send,
             chat_reset,
             ingest_file,

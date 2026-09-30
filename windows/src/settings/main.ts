@@ -208,6 +208,7 @@ function providerSection(): HTMLElement {
     h("div", {class:"row"},h("label", {text:"Max output tokens"}),tokens),
     h("div", {class:"row"},h("label", {text:"Web Search"}),toggle(settings.openaiWebSearch,v => {settings.openaiWebSearch=v; void save();})),
     h("div", {class:"row"},h("label", {text:"Code Interpreter (API charges apply)"}),toggle(settings.openaiCodeInterpreter,v => {settings.openaiCodeInterpreter=v; void save();})),
+    h("div", {class:"row"},h("label", {text:"Integration status tool (read only)"}),toggle(settings.openaiIntegrations,v => {settings.openaiIntegrations=v; void save();})),
     h("div", {class:"hint",text:"Computer Use: disabled; local execution unavailable. Tools require a catalog model."}));
 }
 

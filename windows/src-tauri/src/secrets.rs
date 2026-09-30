@@ -50,3 +50,20 @@ pub fn clear(key: &str) -> Result<(), String> {
 pub fn present(key: &str) -> bool {
     get(key).is_some()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test] fn unknown_keys_are_rejected() {
+        assert!(entry("unregistered-secret").is_none());
+        assert!(KNOWN_KEYS.contains(&"openai-api-key"));
+    }
+    #[test] fn credential_manager_round_trip() {
+        let account = format!("coucou-test-{}",std::process::id());
+        let entry = Entry::new(SERVICE,&account).unwrap();
+        entry.set_password("unit-test-value").unwrap();
+        assert_eq!(entry.get_password().unwrap(),"unit-test-value");
+        entry.delete_credential().unwrap();
+        assert!(entry.get_password().is_err());
+    }
+}

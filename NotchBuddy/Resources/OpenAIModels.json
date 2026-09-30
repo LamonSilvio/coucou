@@ -1,6 +1,27 @@
 {
   "defaultModel": "gpt-4.1",
   "models": {
-    "gpt-4.1": { "vision": true, "tools": ["web_search", "code_interpreter"], "reasoning": [] }
+    "gpt-4.1": {
+      "vision": true,
+      "tools": [
+        "web_search",
+        "code_interpreter",
+        "function"
+      ],
+      "reasoning": []
+    },
+    "gpt-5": {
+      "vision": true,
+      "tools": [
+        "web_search",
+        "code_interpreter",
+        "function"
+      ],
+      "reasoning": [
+        "low",
+        "medium",
+        "high"
+      ]
+    }
   }
 }

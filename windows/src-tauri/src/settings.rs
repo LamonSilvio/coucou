@@ -32,6 +32,8 @@ pub struct Settings {
     pub openai_web_search: bool,
     #[serde(default)]
     pub openai_code_interpreter: bool,
+    #[serde(default)]
+    pub openai_integrations: bool,
 
 }
 
@@ -60,7 +62,7 @@ impl Default for Settings {
             model: default_model(),
             ai_provider: crate::ai::Provider::Anthropic,
             openai_model: String::new(), openai_reasoning: String::new(),
-            openai_max_tokens: 4096, openai_web_search: false, openai_code_interpreter: false,
+            openai_max_tokens: 4096, openai_web_search: false, openai_code_interpreter: false, openai_integrations: false,
         }
     }
 }

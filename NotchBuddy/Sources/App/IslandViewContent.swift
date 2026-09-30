@@ -827,11 +827,17 @@ struct ChatBubble: View {
                     .background(Color.white.opacity(0.13))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
+                VStack(alignment: .leading, spacing: 5) {
                 Text(message.content)
                     .font(.system(size: 12.5))
                     .foregroundColor(Color(hex: "#B0B5BE"))
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                ForEach(message.sources) { source in Link(source.title, destination: source.url).font(.system(size: 11)) }
+                ForEach(message.artifacts) { artifact in
+                    Button("Save \(artifact.filename)") { Task { await OpenAIService.shared.saveArtifact(artifact) } }.font(.system(size: 11))
+                }
+                }
                 Spacer(minLength: 8)
             }
         }

@@ -13,6 +13,14 @@ struct AgentEvent: Codable, Sendable {
     var detail: String
 }
 
+enum CodexProtocol {
+    static func decision(allow: Bool) -> String { allow ? "accept" : "decline" }
+    static func canApprove(method: String, thread: String?, turn: String?, params: [String: Any]) -> Bool {
+        ["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].contains(method)
+            && thread != nil && turn != nil && params["threadId"] as? String == thread && params["turnId"] as? String == turn
+    }
+}
+
 enum ClaudeCodeAdapter {
     static func event(_ name: String, session: String, tool: String = "") -> AgentEvent? {
         let map: [String: AgentEventKind] = ["SessionStart": .sessionStarted, "SessionEnd": .sessionEnded,

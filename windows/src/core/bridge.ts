@@ -85,7 +85,8 @@ export const Bridge = {
   // ── Chat, files, secrets ──────────────────────────────────────────────────
   /** One chat turn. The API key and any file bytes never leave Rust. */
   chatSend: (query: string, context: ChatContext | null) =>
-    callOrThrow<{ text: string; provider: string }>("chat_send", { query, context }),
+    callOrThrow<{ text: string; provider: string; sources: {title:string;url:string}[]; artifacts: {containerId:string;fileId:string;filename:string}[] }>("chat_send", { query, context }),
+  downloadArtifact: (container: string, file: string) => callOrThrow<string>("openai_download_artifact", {container,file}),
   chatReset: () => call<void>("chat_reset"),
   /** Copies a dropped file into the inbox. */
   ingestFile: (path: string) => callOrThrow<DroppedFile>("ingest_file", { path }),

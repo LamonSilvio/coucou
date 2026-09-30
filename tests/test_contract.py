@@ -11,7 +11,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn(catalog['defaultModel'],catalog['models'])
         for model in catalog['models'].values():
             self.assertIsInstance(model['vision'],bool)
-            self.assertTrue(set(model['tools']) <= {'web_search','code_interpreter'})
+            self.assertTrue(set(model['tools']) <= {'web_search','code_interpreter','function'})
             self.assertTrue(set(model['reasoning']) <= {'low','medium','high'})
 
     def test_catalog_has_no_credentials(self):

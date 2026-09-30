@@ -20,16 +20,21 @@ extension ClaudeService: AIProvider {}
 @MainActor
 final class AIChatRouter {
     static let shared = AIChatRouter()
-    private let providers: [AIProviderID: any AIProvider] = [
-        .anthropic: ClaudeService.shared, .openai: OpenAIService.shared,
-    ]
+    private let providers: [AIProviderID: any AIProvider]
+    private let selection: () -> AIProviderID
+    init(providers: [AIProviderID: any AIProvider]? = nil, selection: (() -> AIProviderID)? = nil) {
+        self.providers = providers ?? [.anthropic: ClaudeService.shared, .openai: OpenAIService.shared]
+        self.selection = selection ?? {
+            AIProviderID.resolve(AIProviderID(rawValue: UserDefaults.standard.string(forKey: "aiProvider") ?? "anthropic") ?? .anthropic,
+                anthropic: !(KeychainStore.shared.get("anthropic-api-key") ?? "").isEmpty,
+                openai: !(KeychainStore.shared.get("openai-api-key") ?? "").isEmpty)
+        }
+    }
     private var active: AIProviderID?
     private var busy = false
 
     var selected: AIProviderID {
-        AIProviderID.resolve(AIProviderID(rawValue: UserDefaults.standard.string(forKey: "aiProvider") ?? "anthropic") ?? .anthropic,
-            anthropic: !(KeychainStore.shared.get("anthropic-api-key") ?? "").isEmpty,
-            openai: !(KeychainStore.shared.get("openai-api-key") ?? "").isEmpty)
+        selection()
     }
     var label: String { selected == .openai ? "OpenAI" : "Claude" }
 

@@ -18,7 +18,19 @@ function bubble(message: ChatMessage): HTMLElement {
       h("div", { class: "bubble", text: message.content }),
     );
   }
-  return h("div", { class: "chat-row" }, h("div", { class: "reply", text: (message.provider ? message.provider + " · " : "") + message.content }));
+  const reply = h("div", {class:"reply"},h("div", {text:(message.provider ? message.provider + " · " : "") + message.content}));
+  for (const source of message.sources ?? []) reply.append(h("button", {text:source.title,onclick:() => void Bridge.openUrl(source.url)}));
+  for (const artifact of message.artifacts ?? []) {
+    const button = h("button", {text:`Save ${artifact.filename}`});
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try { const path = await Bridge.downloadArtifact(artifact.containerId,artifact.fileId); State.noteMessage = `Saved: ${path}`; }
+      catch { State.noteMessage = "Could not save generated file. It may have expired."; }
+      finally { button.disabled = false; State.view = "note"; State.notify(); }
+    });
+    reply.append(button);
+  }
+  return h("div", {class:"chat-row"},reply);
 }
 
 function typingDots(): HTMLElement {
@@ -82,7 +94,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
     try {
       const reply = await Bridge.chatSend(query, context);
-      State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text, provider: reply.provider });
+      State.chatHistory.push({ id: nextId++, role: "assistant", content: reply.text, provider: reply.provider, sources: reply.sources, artifacts: reply.artifacts });
       State.stateOverride = null;
       Sound.play("finish");
     } catch (err) {

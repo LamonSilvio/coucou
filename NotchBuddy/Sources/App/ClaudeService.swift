@@ -9,13 +9,15 @@ enum Keychain {
     @discardableResult
     static func save(key: String, value: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
-        // Delete existing item first (update pattern)
+        // Update atomically; an OS storage failure must not delete the existing key.
         let lookup: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
-        SecItemDelete(lookup as CFDictionary)
+        let status = SecItemUpdate(lookup as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecSuccess { return true }
+        guard status == errSecItemNotFound else { return false }
         // Add with strictest access control:
         // WhenUnlockedThisDeviceOnly = accessible only while Mac is unlocked,
         // never synced to iCloud, never migrated to another device.

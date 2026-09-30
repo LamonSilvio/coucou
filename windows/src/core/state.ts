@@ -34,6 +34,8 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   provider?: string;
+  sources?: {title:string;url:string}[];
+  artifacts?: {containerId:string;fileId:string;filename:string}[];
 }
 
 export type PromptContext =
@@ -96,7 +98,7 @@ export interface Settings {
   model: string;
   aiProvider: "anthropic" | "openai" | "auto";
   openaiModel: string; openaiReasoning: string; openaiMaxTokens: number;
-  openaiWebSearch: boolean; openaiCodeInterpreter: boolean;
+  openaiWebSearch: boolean; openaiCodeInterpreter: boolean; openaiIntegrations: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -112,7 +114,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hooksInstalled: false,
   model: "claude-opus-5",
   aiProvider: "anthropic", openaiModel: "", openaiReasoning: "", openaiMaxTokens: 4096,
-  openaiWebSearch: false, openaiCodeInterpreter: false,
+  openaiWebSearch: false, openaiCodeInterpreter: false, openaiIntegrations: false,
 };
 
 type Listener = () => void;

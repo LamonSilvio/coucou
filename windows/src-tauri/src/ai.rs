@@ -26,6 +26,10 @@ impl Router {
     pub fn reset(&mut self) {
         self.claude.reset(); self.openai.reset(); self.active = None;
     }
+    pub async fn download(&self, container: &str, file: &str) -> Result<String,String> {
+        if self.active != Some(Provider::Openai) { return Err("Select the OpenAI conversation first.".into()); }
+        self.openai.download(container,file).await
+    }
     pub async fn send(&mut self, app: &tauri::AppHandle, settings: &Settings, query: String, context: Option<claude::ChatContext>) -> Result<claude::ChatReply, String> {
         let id = resolve(settings.ai_provider, secrets::present("anthropic-api-key"), secrets::present("openai-api-key"));
         if self.active != Some(id) { self.reset(); self.active = Some(id); }

@@ -38,8 +38,8 @@ impl Executor for WindowsComputerExecutor {
     }
 }
 pub async fn handle(app:&AppHandle,call:&Value,target:&str)->Result<Value,String>{
-    let approvals=app.state::<Approvals>();let generation=approvals.generation();
-    run_with(call,|action:Action|async {
+    let state=app.state::<Approvals>();let approvals=&*state;let generation=approvals.generation();
+    run_with(call,|action:Action|async move {
         let allow=approvals.authorize(app,action.clone()).await;
         allow&&approvals.claim_execution(&action.id)
     },|request:Action,action:Value|{
@@ -67,6 +67,7 @@ where A:Fn(Action)->AF,AF:std::future::Future<Output=bool>,E:Fn(Action,Value)->E
     if cancelled(){return Err("Computer run cancelled.".into())}
     if !authorize(capture.clone()).await||cancelled(){return Err("Screenshot transmission denied.".into())}
     let image=execute(capture,json!({"type":"screenshot"})).await?;
+    if !crate::image_workflow::valid_png(&crate::image_workflow::decode(&image)?){return Err("Invalid or oversized screenshot.".into())}
     let mut output=json!({"type":"computer_call_output","call_id":id,"output":{"type":"computer_screenshot","image_url":format!("data:image/png;base64,{image}"),"detail":"original"}});
     if call["pending_safety_checks"].as_array().is_some_and(|a|!a.is_empty()){output["acknowledged_safety_checks"]=call["pending_safety_checks"].clone();}
     Ok(output)
@@ -77,7 +78,7 @@ where A:Fn(Action)->AF,AF:std::future::Future<Output=bool>,E:Fn(Action,Value)->E
  #[test]fn official_action_batch_parsing(){assert_eq!(parse(&json!({"type":"computer_call","actions":[{"type":"keypress","keys":["ENTER"]},{"type":"click","x":1,"y":2}]})).unwrap().len(),2);}
  #[test]fn no_scripts_or_clipboard(){for a in [json!({"type":"exec","code":"bad"}),json!({"type":"keypress","keys":["CTRL","V"]}),json!({"type":"type","text":"Bearer private"})]{assert!(parse(&json!({"type":"computer_call","actions":[a]})).is_err());}}
  #[test]fn mock_executor(){struct Fake;impl Executor for Fake{fn execute(&self,a:&Value)->Result<String,String>{Ok(a["type"].as_str().unwrap().into())}}assert_eq!(Fake.execute(&json!({"type":"click"})).unwrap(),"click");}
- #[tokio::test]async fn mocked_logical_execution_and_approval(){let requests=std::sync::Mutex::new(vec![]);let executions=std::sync::Mutex::new(vec![]);let call=json!({"type":"computer_call","call_id":"mock_steps","actions":[{"type":"click","x":1,"y":2}],"pending_safety_checks":[{"id":"check","message":"Review"}]});let output=run_with(&call,|a|{requests.lock().unwrap().push(a.operation);std::future::ready(true)},|_,a|{executions.lock().unwrap().push(a["type"].as_str().unwrap().to_owned());std::future::ready(Ok("mock_image".into()))},||false).await.unwrap();assert_eq!(*requests.lock().unwrap(),vec!["safety_checks","click","screenshot"]);assert_eq!(*executions.lock().unwrap(),vec!["click","screenshot"]);assert_eq!(output["type"],"computer_call_output");assert!(output.get("acknowledged_safety_checks").is_some());}
+ #[tokio::test]async fn mocked_logical_execution_and_approval(){let requests=std::sync::Mutex::new(vec![]);let executions=std::sync::Mutex::new(vec![]);let call=json!({"type":"computer_call","call_id":"mock_steps","actions":[{"type":"click","x":1,"y":2}],"pending_safety_checks":[{"id":"check","message":"Review"}]});let output=run_with(&call,|a|{requests.lock().unwrap().push(a.operation);std::future::ready(true)},|_,a|{executions.lock().unwrap().push(a["type"].as_str().unwrap().to_owned());std::future::ready(Ok("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6R6IAAAAASUVORK5CYII=".into()))},||false).await.unwrap();assert_eq!(*requests.lock().unwrap(),vec!["safety_checks","click","screenshot"]);assert_eq!(*executions.lock().unwrap(),vec!["click","screenshot"]);assert_eq!(output["type"],"computer_call_output");assert!(output.get("acknowledged_safety_checks").is_some());}
  #[tokio::test]async fn denial_never_invokes_executor(){let call=json!({"type":"computer_call","call_id":"denied_steps","actions":[{"type":"click","x":1,"y":2}]});assert!(run_with(&call,|_|std::future::ready(false),|_,_|{panic!("Denied executor invoked");#[allow(unreachable_code)]std::future::ready(Ok(String::new()))},||false).await.is_err());}
  #[test]fn native_driver_safe_bootstrap(){assert!(WindowsComputerExecutor{target:"msedge".into()}.execute(&json!({"type":"wait"})).is_ok());}
 }

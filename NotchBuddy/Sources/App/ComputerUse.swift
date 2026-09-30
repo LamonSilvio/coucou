@@ -43,6 +43,7 @@ enum ComputerUse {
         let image: String
         do { image = try await executor.screenshot(); approvals.record(capture, outcome: "success") }
         catch { approvals.record(capture, outcome: "failure"); throw error }
+        guard let bytes = Data(base64Encoded: image), ImageWorkflow.validPNG(bytes) else { throw OpenAIError.message("Invalid or oversized screenshot.") }
         var result: [String: Any] = ["type": "computer_call_output", "call_id": id, "output": ["type": "computer_screenshot", "image_url": "data:image/png;base64," + image, "detail": "original"]]
         if !checks.isEmpty { result["acknowledged_safety_checks"] = checks }
         return result

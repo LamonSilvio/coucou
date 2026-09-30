@@ -56,6 +56,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
   (el.querySelector(".card") as HTMLElement).style.setProperty("--wash", "rgba(99,102,241,0.5)");
 
   let sending = false;
+  let provider = State.settings.aiProvider;
   let renderedCount = -1;
 
   async function submit() {
@@ -65,6 +66,11 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
     sending = true;
     Sound.play("send");
 
+    if (provider !== State.settings.aiProvider) {
+      provider = State.settings.aiProvider;
+      State.chatHistory = [];
+      await Bridge.chatReset();
+    }
     State.chatHistory.push({ id: nextId++, role: "user", content: query });
     State.stateOverride = "thinking";
     State.notify();
@@ -72,7 +78,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
 
     const file = State.droppedFile;
     const context: ChatContext | null =
-      State.chatHistory.length === 1 && file ? { kind: "file", name: file.name, path: file.path } : null;
+      file ? { kind: "file", name: file.name, path: file.path } : null;
 
     try {
       const reply = await Bridge.chatSend(query, context);
@@ -122,7 +128,7 @@ export function buildPrompt(onHeightChange: () => void): ViewHost {
         log.scrollTop = log.scrollHeight;
       }
 
-      input.placeholder = State.chatHistory.length === 0 ? "Ask me anything…" : "Continue…";
+      input.placeholder = `Ask ${State.settings.aiProvider === "openai" ? "OpenAI" : State.settings.aiProvider === "auto" ? "AI (Auto)" : "Claude"}…`;
       input.disabled = sending;
     },
     focus() {

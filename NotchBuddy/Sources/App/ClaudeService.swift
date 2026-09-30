@@ -61,7 +61,7 @@ final class KeychainStore: @unchecked Sendable {
     private let lock = NSLock()
 
     private static let allKeys = [
-        "anthropic-api-key",
+        "anthropic-api-key", "openai-api-key",
         "resend-api-key", "resend-from",
         "n8n-url", "n8n-api-key",
         "vercel-token",
@@ -242,7 +242,7 @@ final class ClaudeService {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let msg = String(data: data, encoding: .utf8) ?? "unknown error"
+            let msg = "Anthropic request failed. Check API credentials, quota and model availability."
             throw NSError(domain: "Claude", code: 0, userInfo: [NSLocalizedDescriptionKey: msg])
         }
         return data

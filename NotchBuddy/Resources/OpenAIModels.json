@@ -1,0 +1,6 @@
+{
+  "defaultModel": "gpt-4.1",
+  "models": {
+    "gpt-4.1": { "vision": true, "tools": ["web_search", "code_interpreter"], "reasoning": [] }
+  }
+}

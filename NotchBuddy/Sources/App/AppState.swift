@@ -175,6 +175,7 @@ final class AppState: ObservableObject {
     @Published var notionError: String? = nil
 
     // Chat conversation history
+    @Published var activeAITool: String? = nil
     @Published var chatHistory: [ChatMessage] = []
 
     // Pending approval request from Claude Code hook

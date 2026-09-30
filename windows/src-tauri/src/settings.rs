@@ -20,7 +20,22 @@ pub struct Settings {
     /// Defaulted explicitly so a settings.json written by an older build still loads.
     #[serde(default = "default_model")]
     pub model: String,
+    #[serde(default)]
+    pub ai_provider: crate::ai::Provider,
+    #[serde(default)]
+    pub openai_model: String,
+    #[serde(default)]
+    pub openai_reasoning: String,
+    #[serde(default = "default_tokens")]
+    pub openai_max_tokens: u32,
+    #[serde(default)]
+    pub openai_web_search: bool,
+    #[serde(default)]
+    pub openai_code_interpreter: bool,
+
 }
+
+fn default_tokens() -> u32 { 4096 }
 
 fn default_model() -> String {
     crate::claude::DEFAULT_MODEL.to_string()
@@ -43,6 +58,9 @@ impl Default for Settings {
             autostart: false,
             hooks_installed: false,
             model: default_model(),
+            ai_provider: crate::ai::Provider::Anthropic,
+            openai_model: String::new(), openai_reasoning: String::new(),
+            openai_max_tokens: 4096, openai_web_search: false, openai_code_interpreter: false,
         }
     }
 }

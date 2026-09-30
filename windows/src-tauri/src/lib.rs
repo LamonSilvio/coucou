@@ -1,5 +1,7 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
+mod ai;
+mod openai;
 mod claude;
 mod files;
 mod hooks;
@@ -21,7 +23,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
-use claude::{Chat, ChatContext, ChatReply};
+use claude::{ChatContext, ChatReply};
+type Chat = tokio::sync::Mutex<ai::Router>;
 use files::DroppedFile;
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
@@ -248,13 +251,13 @@ async fn chat_send(
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let model = shared.settings.lock().unwrap().model.clone();
-    claude::send(&chat, &model, query, context).await
+    let settings = shared.settings.lock().unwrap().clone();
+    chat.lock().await.send(&settings, query, context).await
 }
 
 #[tauri::command]
-fn chat_reset(chat: State<Chat>) {
-    chat.reset();
+async fn chat_reset(chat: State<'_, Chat>) {
+    chat.lock().await.reset();
 }
 
 /// Copies a dropped file into the inbox and reports its name back.

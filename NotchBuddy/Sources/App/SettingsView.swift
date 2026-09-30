@@ -14,6 +14,14 @@ struct SettingsView: View {
     @State private var claudeAccessGranted: Bool = (UserDefaults.standard.data(forKey: "claudeDirectoryBookmark") != nil)
     #endif
 
+    @AppStorage("aiProvider") private var aiProvider = "anthropic"
+    @AppStorage("openaiModel") private var openaiModel = ""
+    @AppStorage("openaiReasoning") private var openaiReasoning = ""
+    @AppStorage("openaiMaxTokens") private var openaiMaxTokens = 4096
+    @AppStorage("openaiWebSearch") private var openaiWebSearch = false
+    @AppStorage("openaiCodeInterpreter") private var openaiCodeInterpreter = false
+    @State private var openaiKey = ""
+
     // Integration keys
     @State private var resendKey: String    = KeychainStore.shared.get("resend-api-key")  ?? ""
     @State private var resendFrom: String   = KeychainStore.shared.get("resend-from")     ?? ""
@@ -48,6 +56,41 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+
+                GroupBox("AI Provider") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Provider", selection: $aiProvider) {
+                            Text("Anthropic").tag("anthropic")
+                            Text("OpenAI").tag("openai")
+                            Text("Auto (Anthropic first)").tag("auto")
+                        }
+                        Text("Changing provider starts a new conversation. Auto never retries on another provider.").font(.caption)
+                        Button("New conversation") { AIChatRouter.shared.reset() }
+                    }.padding(6)
+                }
+                GroupBox("OpenAI API") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SecureField("OpenAI API key", text: $openaiKey).textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button("Save key") {
+                                guard !openaiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                                KeychainStore.shared.set("openai-api-key", value: openaiKey.trimmingCharacters(in: .whitespacesAndNewlines))
+                                openaiKey = ""
+                                statusMessage = "OpenAI key saved in Keychain."
+                            }
+                            Button("Remove key") { KeychainStore.shared.remove("openai-api-key") }
+                        }
+                        TextField("Model (blank = catalog default)", text: $openaiModel).textFieldStyle(.roundedBorder)
+                        Picker("Reasoning", selection: $openaiReasoning) {
+                            Text("Model default").tag("")
+                            Text("Low").tag("low"); Text("Medium").tag("medium"); Text("High").tag("high")
+                        }
+                        Stepper("Max output tokens: \(openaiMaxTokens)", value: $openaiMaxTokens, in: 256...32768, step: 256)
+                        Toggle("Web Search", isOn: $openaiWebSearch)
+                        Toggle("Code Interpreter (API charges apply)", isOn: $openaiCodeInterpreter)
+                        Text("Computer Use: disabled; local computer execution is unavailable. Tools require a model listed in OpenAIModels.json.").font(.caption)
+                    }.padding(6)
+                }
 
                 // MARK: API
                 GroupBox("Anthropic API") {

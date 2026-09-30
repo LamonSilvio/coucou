@@ -177,7 +177,7 @@ struct EmptyStateView: View {
                         .foregroundColor(Color(hex: "#9398A1"))
                 }
                 Spacer()
-                PrimaryButton("Ask Claude") {
+                PrimaryButton("Ask \(AIChatRouter.shared.label)") {
                     state.view = .prompt
                 }
             }
@@ -757,8 +757,10 @@ struct PromptView: View {
                     Spacer()
                 }
 
+                Text(state.activeAITool ?? AIChatRouter.shared.label)
+                    .font(.system(size: 10)).foregroundColor(.secondary)
                 HStack(spacing: 8) {
-                    TextField(state.chatHistory.isEmpty ? "Ask me anything…" : "Continue…", text: $text)
+                    TextField(state.chatHistory.isEmpty ? "Ask \(AIChatRouter.shared.label)…" : "Continue…", text: $text)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .focused($focused)
@@ -788,13 +790,13 @@ struct PromptView: View {
 
     private func sendMessage() {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return }
+        guard !query.isEmpty, state.stateOverride != .thinking else { return }
         text = ""
         focused = false
         state.chatHistory.append(ChatMessage(role: .user, content: query))
         state.stateOverride = .thinking
         Task {
-            await ClaudeService.shared.chat(query: query, context: state.promptContext, state: state)
+            await AIChatRouter.shared.chat(query: query, context: state.promptContext, state: state)
             await MainActor.run { focused = true }
         }
     }

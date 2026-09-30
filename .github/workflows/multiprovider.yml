@@ -1,0 +1,52 @@
+name: Multi-provider validation
+on:
+  push:
+    branches: [feature/openai-multiprovider]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [baseline, candidate]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.revision == 'baseline' && '5ae7bd946ab51493b5ddaebdc5f449f269ebb421' || github.sha }}
+      - run: brew install xcodegen
+      - run: cd NotchBuddy && xcodegen
+      - run: xcodebuild -project NotchBuddy/NotchBuddy.xcodeproj -scheme NotchBuddy -configuration Debug build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+      - if: matrix.revision == 'candidate'
+        run: xcodebuild -project NotchBuddy/NotchBuddy.xcodeproj -scheme NotchBuddy -configuration Debug test CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+      - if: matrix.revision == 'candidate'
+        run: python3 -m unittest discover -s tests -v
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [baseline, candidate]
+    defaults:
+      run:
+        working-directory: windows
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.revision == 'baseline' && '5ae7bd946ab51493b5ddaebdc5f449f269ebb421' || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: windows
+      - run: npm ci
+      - run: npm run build
+      - if: matrix.revision == 'candidate'
+        run: node --test tests/*.test.mjs
+      - run: cargo test --workspace
+      - run: npm run tauri build -- --no-bundle

@@ -3,6 +3,7 @@ use serde_json::{json,Value};
 use tauri::{AppHandle,Manager};
 use crate::{actions::{Action,Approvals,Risk,redact},secrets};
 #[derive(Clone,Debug,Serialize,Deserialize,PartialEq,Eq)]
+#[serde(deny_unknown_fields)]
 pub struct Server {pub name:String,pub endpoint:String,pub enabled:bool,pub tools:Vec<String>}
 impl Server {
     pub fn valid(&self)->bool{
@@ -39,4 +40,5 @@ pub async fn approval(app:&AppHandle,item:&Value,servers:&[Server])->Value{
  #[test]fn mocked_discovery(){assert_eq!(discovery(&[json!({"type":"mcp_list_tools","server_label":"example","tools":[{"name":"search"}]})]),"example: search");}
  #[test]fn server_configuration_and_auth_boundary(){let s=Server{name:"example".into(),endpoint:"https://example.com/mcp".into(),enabled:true,tools:vec!["search".into()]};assert!(s.valid());let v=s.tool().unwrap();assert_eq!(v["require_approval"],"always");assert_eq!(v["allowed_tools"],json!(["search"]));assert!(validate(&[s.clone(),s]).is_err());}
  #[test]fn secret_endpoint_denied(){for url in ["http://example.com/mcp","https://user:password@example.com/mcp","https://example.com/mcp?token=secret"]{assert!(!Server{name:"example".into(),endpoint:url.into(),enabled:true,tools:vec!["search".into()]}.valid());}}
+ #[test]fn plaintext_tokens_rejected_and_empty_allowlist_discovery(){assert!(serde_json::from_value::<Server>(json!({"name":"example","endpoint":"https://example.com/mcp","enabled":true,"tools":[],"authorization":"private"})).is_err());let s=Server{name:"discovery".into(),endpoint:"https://example.com/mcp".into(),enabled:true,tools:vec![]};assert!(s.valid());assert!(s.tool().unwrap().get("allowed_tools").is_none());}
 }

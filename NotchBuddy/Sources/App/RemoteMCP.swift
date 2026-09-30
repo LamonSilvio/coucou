@@ -19,6 +19,7 @@ enum RemoteMCP {
         let raw = defaults.string(forKey: "mcpServers") ?? "[]"
         guard let data = raw.data(using: .utf8), data.count < 24000 else { throw OpenAIError.message("Invalid MCP configuration.") }
         let servers = try JSONDecoder().decode([RemoteMCPServer].self, from: data)
+        guard let objects = try JSONSerialization.jsonObject(with: data) as? [[String: Any]], objects.allSatisfy({ Set($0.keys) == Set(["name", "endpoint", "enabled", "tools"]) }) else { throw OpenAIError.message("MCP JSON must not contain tokens or unknown fields.") }
         guard servers.count <= 8, Set(servers.map(\.name)).count == servers.count, servers.allSatisfy({ $0.valid() }) else { throw OpenAIError.message("Invalid MCP configuration; names must be unique.") }
         return servers.filter(\.enabled)
     }

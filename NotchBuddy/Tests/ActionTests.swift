@@ -106,6 +106,11 @@ final class ActionTests: XCTestCase {
         let server=RemoteMCPServer(name:"discovery",endpoint:"https://example.com/mcp",enabled:true,tools:[])
         XCTAssertTrue(server.valid());XCTAssertNil(try server.tool(token:nil)["allowed_tools"])
     }
+    func testMCPPlaintextTokenConfigurationRejected() {
+        let suite="mcp-invalid-"+UUID().uuidString,defaults=UserDefaults(suiteName:suite)!;defer{defaults.removePersistentDomain(forName:suite)}
+        defaults.set(#"[{"name":"example","endpoint":"https://example.com/mcp","enabled":true,"tools":[],"authorization":"private"}]"#,forKey:"mcpServers")
+        XCTAssertThrowsError(try RemoteMCP.servers(defaults))
+    }
     func testLegacyClaudeAlwaysAndCodexDenyShareQueue() {
         var shown:[String]=[],decisions:[String]=[]
         let c=ActionApprovalCenter(present:{shown.append($0.id)},available:{true},clear:{_ in AppState.shared.pendingApproval=nil},audit:{_,_ in})
@@ -133,6 +138,9 @@ final class ActionTests: XCTestCase {
         })
         await service.chat(query:"List and use MCP search",context:nil,state:AppState.shared);XCTAssertEqual(bodies.count,2)
         XCTAssertEqual((bodies.first?["tools"] as? [[String:Any]])?.first?["require_approval"] as? String,"always");XCTAssertFalse(service.history.isEmpty)
+        XCTAssertFalse(service.history.contains(where: { $0["type"] as? String == "mcp_approval_response" || $0["type"] as? String == "mcp_approval_request" }))
+        await service.chat(query:"Follow up without another call",context:nil,state:AppState.shared)
+        XCTAssertFalse((bodies.last?["input"] as? [[String:Any]] ?? []).contains(where: { $0["type"] as? String == "mcp_approval_response" }))
     }
     func testComputerResponsesContinuationMock() async throws {
         let suite="computer-chat-"+UUID().uuidString,defaults=UserDefaults(suiteName:suite)!;defer{defaults.removePersistentDomain(forName:suite)}

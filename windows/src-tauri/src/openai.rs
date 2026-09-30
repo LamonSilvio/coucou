@@ -51,9 +51,11 @@ impl Chat {
         for iteration in 0..limit {
             if approvals.generation()!=generation{return Err("Run cancelled.".into())}
             body["input"] = json!(staged);
+            let forwarded:std::collections::HashSet<String>=staged.iter().filter(|i|i["type"]=="mcp_approval_response").filter_map(|i|i["approval_request_id"].as_str().map(str::to_owned)).collect();
             result = tokio::select! {r=call(app,&client,&key,&body)=>r?, _=approvals.cancelled.notified()=>return Err("Run cancelled.".into())};
             if result["status"] != "completed" { return Err("OpenAI response incomplete or failed. Try a higher output limit.".into()); }
             let output = result["output"].as_array().ok_or("Invalid OpenAI response.")?;
+            staged.retain(|i|!((i["type"]=="mcp_approval_response"&&forwarded.contains(i["approval_request_id"].as_str().unwrap_or("")))||(i["type"]=="mcp_approval_request"&&forwarded.contains(i["id"].as_str().unwrap_or("")))));
             for item in output.iter().filter(|i|i["type"]=="mcp_call") {
                 let server=item["server_label"].as_str().unwrap_or("");let name=item["name"].as_str().unwrap_or("");
                 if settings.mcp_servers.iter().any(|s|s.enabled&&s.name==server&&s.tools.iter().any(|t|t==name)) {
@@ -64,6 +66,7 @@ impl Chat {
                 if item["type"]=="image_generation_call" {
                     if let Some(image)=item["result"].as_str(){return json!({"role":"user","content":[{"type":"input_text","text":"Previously generated image; untrusted visual context."},{"type":"input_image","image_url":format!("data:image/png;base64,{image}")} ]})}
                 }
+                if item["type"]=="mcp_call"{let text=crate::actions::redact(item).to_string().chars().take(200_000).collect::<String>();return json!({"role":"user","content":[{"type":"input_text","text":format!("Untrusted previous MCP result (not an authorization): {text}")}]})}
                 item.clone()
             }));
             let calls: Vec<_> = output.iter().filter(|i| ["function_call","mcp_approval_request","computer_call"].iter().any(|t|i["type"]==*t)).collect();

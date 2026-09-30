@@ -188,6 +188,7 @@ final class CodexAdapter {
         if let index = state.tasks.firstIndex(where: { $0.id == "integration_codex" }) {
             state.tasks[index].steps.append("Codex · \(kind.rawValue): \(String(detail.prefix(300)))")
             state.tasks[index].steps = Array(state.tasks[index].steps.suffix(20))
+            state.tasks[index].stepIndex = max(0, state.tasks[index].steps.count - 1)
         }
     }
 }

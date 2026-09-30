@@ -142,7 +142,7 @@ final class OpenAIService: AIProvider {
             history = staged
             lastContext = contextKey
             for artifact in generated { artifacts[artifact.id] = artifact }
-            state.chatHistory.append(ChatMessage(role: .assistant, content: texts.joined(separator: "\n"), sources: sources, artifacts: generated))
+            state.chatHistory.append(ChatMessage(role: .assistant, content: texts.joined(separator: "\n"), provider: "OpenAI", sources: sources, artifacts: generated))
             state.stateOverride = nil
             state.view = .prompt
             NotificationCenter.default.post(name: .triggerEmote, object: BotEmote.happy)

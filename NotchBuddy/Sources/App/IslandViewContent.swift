@@ -88,7 +88,7 @@ struct OverviewView: View {
                 }
 
                 // ↗ jump button — last in ZStack so it renders on top; hidden while any detail is open
-                if !showingN8nDetail {
+                if !showingN8nDetail && agent?.source != .codex {
                     Button(action: { openAgentTarget(agent) }) {
                         Image(systemName: "arrow.up.right")
                             .font(.system(size: 8, weight: .medium))
@@ -114,7 +114,7 @@ struct OverviewView: View {
     }
 
     private func openAgentTarget(_ task: AgentTask?) {
-        guard let task else { return }
+        guard let task, task.source != .codex else { return }
         switch task.id {
         case "integration_claude":
             let vscodeBundleId = "com.microsoft.VSCode"
@@ -291,11 +291,12 @@ struct FinishedView: View {
         ZStack {
             CardBackground(wash: .green)
             VStack(alignment: .leading, spacing: 5) {
-                AgentWho(task: state.focusTask, label: "Claude Code finished")
+                AgentWho(task: state.focusTask, label: state.focusTask?.source == .codex ? "Codex finished" : "Claude Code finished")
                 Text(state.focusTask?.steps.last ?? "Session finished")
                     .font(.system(size: 15, weight: .semibold))
                 HStack(spacing: 8) {
                     #if !APPSTORE
+                    if state.focusTask?.source != .codex {
                     PrimaryButton("Open terminal") {
                         let terminalBundleIds = ["com.apple.Terminal", "com.googlecode.iterm2", "net.kovidgoyal.kitty", "com.mitchellh.ghostty"]
                         let activated = terminalBundleIds.compactMap { id in
@@ -305,6 +306,7 @@ struct FinishedView: View {
                             NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
                         }
                         NotificationCenter.default.post(name: .islandCollapse, object: nil)
+                    }
                     }
                     #endif
                     SecondaryButton("OK") {
@@ -828,6 +830,7 @@ struct ChatBubble: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
                 VStack(alignment: .leading, spacing: 5) {
+                Text(message.provider).font(.system(size: 10, weight: .semibold)).foregroundColor(Color(hex: "#8E939C"))
                 Text(message.content)
                     .font(.system(size: 12.5))
                     .foregroundColor(Color(hex: "#B0B5BE"))
@@ -1011,7 +1014,7 @@ struct IntegrationCardView: View {
 
     // VS Code with active session: show ticker layout (same as overview)
     private var vsCodeSessionActive: Bool {
-        task.id == "integration_claude" && (task.state != .idle || !task.steps.isEmpty)
+        (task.id == "integration_claude" || task.source == .codex) && (task.state != .idle || !task.steps.isEmpty)
     }
 
     // n8n with a finished execution: show result row instead of "Open n8n" button
@@ -1093,7 +1096,7 @@ struct IntegrationCardView: View {
                         .foregroundColor(Color(hex: "#F5F6F8"))
                         .lineLimit(1).truncationMode(.tail)
                         .layoutPriority(1)
-                    Text("Claude Code")
+                    Text(task.source == .codex ? "Codex" : "Claude Code")
                         .font(.system(size: 11))
                         .foregroundColor(Color(hex: "#8E939C"))
                         .lineLimit(1).truncationMode(.tail)

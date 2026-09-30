@@ -7,7 +7,7 @@ use tauri::{AppHandle,Emitter};
 #[serde(rename_all="lowercase")]
 pub enum Risk { Safe, Confirm, Critical }
 pub fn risk(integration:&str,operation:&str)->Risk {
-    if integration=="computer" {return if ["wait","move"].contains(&operation) {Risk::Safe}else{Risk::Critical}}
+    if integration=="computer" {return if operation=="wait" {Risk::Safe}else{Risk::Critical}}
     if integration=="mcp" || integration=="codex" || integration=="stripe" || integration=="n8n" || ["send_email","production_deploy","cancel_booking"].contains(&operation){return Risk::Critical}
     if operation=="list_integrations" {Risk::Safe}else{Risk::Confirm}
 }

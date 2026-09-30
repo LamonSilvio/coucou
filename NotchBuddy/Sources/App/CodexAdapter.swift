@@ -76,7 +76,7 @@ final class CodexAdapter {
         if state.pendingApproval?.provider == "codex" { state.pendingApproval = nil; state.isPinned = false }
     }
 
-    func decide(_ decision: String, requestID: String) {
+    private func decide(_ decision: String, requestID: String) {
         guard let id = approvals.removeValue(forKey: requestID) else { return }
         send(["id": id, "result": ["decision": CodexProtocol.decision(allow: decision == "allow")]])
         emit(.statusChanged, "Codex working")

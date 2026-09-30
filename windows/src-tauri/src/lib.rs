@@ -272,7 +272,7 @@ async fn image_save(image:String)->Result<String,String>{
 }
 #[tauri::command]
 fn codex_decide(app: AppHandle, codex: State<codex::Codex>, request_id: String, allow: bool) -> Result<(),String> {
-    codex.decide(&app,&request_id,allow)
+    codex.queue_decision(&app,&request_id,allow)
 }
 
 // ── Chat, files and secrets ───────────────────────────────────────────────────

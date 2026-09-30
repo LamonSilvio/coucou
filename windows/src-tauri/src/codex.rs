@@ -74,7 +74,11 @@ impl Codex {
         }
     }
 
-    pub fn decide(&self, app: &AppHandle, request_id: &str, allow: bool) -> Result<(),String> {
+    pub fn queue_decision(&self,app:&AppHandle,request_id:&str,allow:bool)->Result<(),String>{
+        let id={let guard=self.session.lock().unwrap();let s=guard.as_ref().ok_or("Codex session ended.")?;if !s.approvals.contains_key(request_id){return Err("Codex approval expired.".into())}format!("codex-{}-{request_id}",s.generation)};
+        app.state::<crate::actions::Approvals>().decide(app,&id,allow);Ok(())
+    }
+    fn decide(&self, app: &AppHandle, request_id: &str, allow: bool) -> Result<(),String> {
         let mut guard = self.session.lock().unwrap();
         let s = guard.as_mut().ok_or("Codex session ended.")?;
         let id = s.approvals.remove(request_id).ok_or("Codex approval expired or already resolved.")?;

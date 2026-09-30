@@ -228,8 +228,6 @@ struct ApprovalView: View {
         guard requestID == state.pendingApproval?.requestID else { return }
         if let approval, approval.provider == "actions" {
             ActionApprovalCenter.shared.resolve(approval.requestID, allow: decision == "allow")
-        } else if let approval, approval.provider == "codex" {
-            CodexAdapter.shared.decide(decision, requestID: approval.requestID)
         } else { HookServer.shared.sendApprovalDecision(decision) }
     }
 

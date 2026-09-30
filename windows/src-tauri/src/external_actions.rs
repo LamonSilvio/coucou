@@ -15,7 +15,7 @@ pub fn plan(integration:&str,operation:&str,params:&Value,webhook:&str)->Result<
     let object=params.as_object().ok_or("Parameters must be an object.")?;
     if params.to_string().len()>12000 || redact(params)!=*params || object.keys().any(|k|!fields.iter().any(|v|v==k)) || d["required"].as_array().unwrap().iter().any(|k|params.get(k.as_str().unwrap()).is_none()) {return Err("Unexpected, sensitive or missing action parameters.".into())}
     let mut path=d["path"].as_str().unwrap().to_owned();
-    for key in ["owner","repo","number","block_id"]{
+    for key in ["owner","repo","number","block_id","bookingUid"]{
         if path.contains(&format!("{{{key}}}")){
             let raw=if let Some(s)=params[key].as_str(){s.to_owned()}else{params[key].to_string()};
             if raw.is_empty()||raw=="."||raw==".."||!raw.bytes().all(|c|c.is_ascii_alphanumeric()||b"._-".contains(&c)){return Err("Invalid resource identifier.".into())}
@@ -73,5 +73,6 @@ async fn send(p:Plan,id:&str)->Result<Value,&'static str>{
  #[test]fn resend_real_send_requires_critical(){let p=plan("resend","send_email",&json!({"from":"from@example.com","to":["to@example.com"],"subject":"Test","text":"Body"}),"").unwrap();assert_eq!(p.url,"https://api.resend.com/emails");assert_eq!(risk("resend","send_email"),crate::actions::Risk::Critical);}
  #[test]fn stripe_refund_critical(){assert_eq!(risk("stripe","refund"),crate::actions::Risk::Critical);assert!(plan("stripe","refund",&json!({"payment_intent":"pi_fake","amount":100}),"").is_ok());assert!(plan("stripe","refund",&json!({"payment_intent":"pi_fake","amount":-1}),"").is_err());}
  #[test]fn calcom_booking_mock(){assert_eq!(plan("calcom","create_booking",&json!({"start":"2027-01-01T10:00:00Z","eventTypeId":1,"attendee":{"name":"Test","email":"test@example.com","timeZone":"UTC"}}),"").unwrap().url,"https://api.cal.com/v2/bookings");}
+ #[test]fn calcom_reschedule_and_cancel(){assert_eq!(plan("calcom","reschedule_booking",&json!({"bookingUid":"booking_mock","start":"2027-01-01T11:00:00Z","reschedulingReason":"Test"}),"").unwrap().url,"https://api.cal.com/v2/bookings/booking_mock/reschedule");assert_eq!(risk("calcom","cancel_booking"),crate::actions::Risk::Critical);assert!(plan("calcom","cancel_booking",&json!({"bookingUid":"booking_mock","cancellationReason":"Test"}),"").is_ok());}
  #[test]fn arbitrary_urls_and_credentials_rejected(){assert!(plan("github","create_issue",&json!({"owner":"..","repo":"repo","title":"Test","body":"Body"}),"").is_err());assert!(plan("github","create_issue",&json!({"owner":"owner","repo":"repo","title":"Test","body":"Body","url":"https://evil.example"}),"").is_err());}
 }

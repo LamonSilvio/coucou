@@ -15,7 +15,7 @@ struct ExternalPlan {
         let data = try JSONSerialization.data(withJSONObject: parameters)
         guard data.count <= 12000, !SecretRedaction.sensitive(parameters) else { throw OpenAIError.message("Action contains sensitive or oversized parameters.") }
         var path = definition["path"] as? String ?? ""
-        for field in ["owner", "repo", "number", "block_id"] where path.contains("{\(field)}") {
+        for field in ["owner", "repo", "number", "block_id", "bookingUid"] where path.contains("{\(field)}") {
             let value = String(describing: parameters[field] ?? "")
             guard !value.isEmpty, value != ".", value != "..", value.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || [45,46,95].contains($0) }) else { throw OpenAIError.message("Invalid resource identifier.") }
             path = path.replacingOccurrences(of: "{\(field)}", with: value)

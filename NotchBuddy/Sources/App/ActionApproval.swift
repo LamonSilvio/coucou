@@ -17,7 +17,7 @@ enum ActionRiskEvaluator {
     static func risk(integration: String, operation: String) -> SecurityLevel {
         if integration == "computer" { return ["wait", "move"].contains(operation) ? .safe : .critical }
         if integration == "mcp" || integration == "codex" { return .critical } // Server annotations are not authority.
-        if integration == "stripe" || ["send_email", "production_deploy", "cancel_booking"].contains(operation) { return .critical }
+        if ["stripe", "n8n"].contains(integration) || ["send_email", "production_deploy", "cancel_booking"].contains(operation) { return .critical }
         if operation == "list_integrations" { return .safe }
         return .confirm
     }

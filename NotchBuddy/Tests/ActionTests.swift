@@ -99,6 +99,13 @@ final class ActionTests: XCTestCase {
     func testStripeCriticalAndMock() async throws { XCTAssertEqual(action("a","stripe","refund").risk,.critical);try await writeMock("stripe","refund",["payment_intent":"pi_fake","amount":100]) }
     func testCalComWriteMock() async throws { try await writeMock("calcom","create_booking",["start":"2027-01-01T10:00:00Z","eventTypeId":1,"attendee":["name":"Test","email":"test@example.com","timeZone":"UTC"]]) }
     func testExternalURLInjectionRejected() { XCTAssertThrowsError(try ExternalPlan.build(integration:"github",operation:"create_issue",parameters:["owner":"..","repo":"repo","title":"x","body":"x"],id:"test")) }
+    func testCalComRescheduleMock() async throws { try await writeMock("calcom","reschedule_booking",["bookingUid":"booking_mock","start":"2027-01-01T11:00:00Z","reschedulingReason":"Test change"]) }
+    func testCalComCancelCriticalMock() async throws { XCTAssertEqual(action("a","calcom","cancel_booking").risk,.critical);try await writeMock("calcom","cancel_booking",["bookingUid":"booking_mock","cancellationReason":"Test cancellation"],false) }
+    func testNestedSecretAndDiscoveryOnly() throws {
+        XCTAssertTrue(SecretRedaction.sensitive(["api-key":["value":"private"]]));XCTAssertFalse(SecretRedaction.sensitive(["keys":["ENTER"]]))
+        let server=RemoteMCPServer(name:"discovery",endpoint:"https://example.com/mcp",enabled:true,tools:[])
+        XCTAssertTrue(server.valid());XCTAssertNil(try server.tool(token:nil)["allowed_tools"])
+    }
     func testLegacyClaudeAlwaysAndCodexDenyShareQueue() {
         var shown:[String]=[],decisions:[String]=[]
         let c=ActionApprovalCenter(present:{shown.append($0.id)},available:{true},clear:{_ in AppState.shared.pendingApproval=nil},audit:{_,_ in})

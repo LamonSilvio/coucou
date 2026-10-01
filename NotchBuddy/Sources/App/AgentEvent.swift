@@ -14,6 +14,13 @@ struct AgentEvent: Codable, Sendable {
 }
 
 enum CodexProtocol {
+    static func threadParameters(cwd: String) -> [String: Any] { ["cwd": cwd, "sandbox": "readOnly", "approvalPolicy": "unlessTrusted"] }
+    static func acceptsEvent(thread: String?, turn: String?, params: [String: Any]) -> Bool {
+        if let incoming = params["threadId"] as? String, incoming != thread { return false }
+        let incomingTurn = params["turnId"] as? String ?? (params["turn"] as? [String: Any])?["id"] as? String
+        if let turn, let incomingTurn, incomingTurn != turn { return false }
+        return true
+    }
     static func decision(allow: Bool) -> String { allow ? "accept" : "decline" }
     static func canApprove(method: String, thread: String?, turn: String?, params: [String: Any]) -> Bool {
         ["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].contains(method)

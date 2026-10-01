@@ -1,5 +1,5 @@
 //! Official app-server JSONL transport; never reads unrelated CLI sessions or credentials.
-use std::{collections::HashMap, io::{BufRead, BufReader, Write}, process::{Child, ChildStdin, Command, Stdio}, sync::Mutex, os::windows::process::CommandExt};
+use std::{collections::{HashMap,HashSet}, io::{BufRead, BufReader, Write}, process::{Child, ChildStdin, Command, Stdio}, sync::Mutex, os::windows::process::CommandExt};
 use serde::{Serialize, Deserialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
@@ -13,7 +13,7 @@ pub struct AgentEvent {
 
 struct Session {
     child: Child, stdin: ChildStdin, generation: u64, cwd: String, prompt: String, ready: bool,
-    thread: Option<String>, turn: Option<String>, approvals: HashMap<String,Value>, proposals: HashMap<String,String>,
+    thread: Option<String>, turn: Option<String>, approvals: HashMap<String,Value>, proposals: HashMap<String,String>, seen_approval_ids: HashSet<String>,
 }
 #[derive(Default)]
 pub struct Codex { session: Mutex<Option<Session>>, generation: std::sync::atomic::AtomicU64 }
@@ -31,7 +31,7 @@ impl Codex {
         let stdout = child.stdout.take().ok_or("Codex stdout unavailable.")?;
         let stdin = child.stdin.take().ok_or("Codex stdin unavailable.")?;
         let generation = self.generation.fetch_add(1,std::sync::atomic::Ordering::SeqCst) + 1;
-        let mut session = Session {child, stdin, generation, cwd, prompt, ready:false, thread:None, turn:None, approvals:HashMap::new(),proposals:HashMap::new()};
+        let mut session = Session {child, stdin, generation, cwd, prompt, ready:false, thread:None, turn:None, approvals:HashMap::new(),proposals:HashMap::new(),seen_approval_ids:HashSet::new()};
         send(&mut session,json!({"id":1,"method":"initialize","params":{"clientInfo":{"name":"coucou","title":"Coucou","version":"0.1.1"}}}))?;
         *guard = Some(session); drop(guard);
         let startup_app = app.clone();
@@ -78,10 +78,10 @@ impl Codex {
         let id={let guard=self.session.lock().unwrap();let s=guard.as_ref().ok_or("Codex session ended.")?;if !s.approvals.contains_key(request_id){return Err("Codex approval expired.".into())}format!("codex-{}-{request_id}",s.generation)};
         app.state::<crate::actions::Approvals>().decide(app,&id,allow);Ok(())
     }
-    fn decide(&self, app: &AppHandle, request_id: &str, allow: bool) -> Result<(),String> {
+    fn decide(&self, app: &AppHandle, generation: u64, request_id: &str, allow: bool) -> Result<(),String> {
         let mut guard = self.session.lock().unwrap();
         let s = guard.as_mut().ok_or("Codex session ended.")?;
-        let id = s.approvals.remove(request_id).ok_or("Codex approval expired or already resolved.")?;
+        let id = take_scoped_approval(&mut s.approvals,s.generation,generation,request_id)?;
         send(s,json!({"id":id,"result":{"decision":decision(allow)}}))?;
         emit(app,s,"statusChanged","Codex working".into(),None);
         Ok(())
@@ -95,7 +95,7 @@ impl Codex {
             match m["id"].as_u64() {
                 Some(1) => {
                     let _ = send(s,json!({"method":"initialized","params":{}}));
-                    let body = json!({"id":2,"method":"thread/start","params":{"cwd":s.cwd,"sandbox":"readOnly","approvalPolicy":"untrusted"}});
+                    let body = json!({"id":2,"method":"thread/start","params":thread_parameters(&s.cwd)});
                     let _ = send(s,body);
                 }
                 Some(2) => {
@@ -112,7 +112,10 @@ impl Codex {
             return;
         }
         let method = m["method"].as_str().unwrap_or(""); let p = &m["params"];
-        if p["threadId"].as_str().is_some_and(|id| Some(id) != s.thread.as_deref()) { return }
+        if !accepts_event(s.thread.as_deref(),s.turn.as_deref(),p) {
+            if let Some(id)=m.get("id"){let _=send(s,json!({"id":id,"result":{"decision":"decline"}}));}
+            return
+        }
         match method {
             "turn/started" => { s.turn = p["turn"]["id"].as_str().map(str::to_owned); s.ready = s.turn.is_some(); emit(app,s,"statusChanged","Codex working".into(),None); }
             "turn/completed" => {
@@ -143,9 +146,11 @@ impl Codex {
             _ => {},
         }
         let Some(id) = m.get("id") else { return };
+        if s.seen_approval_ids.contains(&id.to_string()) { return }
         if !["item/commandExecution/requestApproval","item/fileChange/requestApproval"].contains(&method) {
             let _ = send(s,json!({"id":id,"error":{"code":-32601,"message":"Unsupported client request"}})); return
         }
+        s.seen_approval_ids.insert(id.to_string());
         if !can_approve(method,s.thread.as_deref(),s.turn.as_deref(),p) {
             let _ = send(s,json!({"id":id,"result":{"decision":"decline"}})); return
         }
@@ -168,7 +173,7 @@ impl Codex {
             let allow=app.state::<crate::actions::Approvals>().authorize(&app,action.clone()).await;
             let codex = app.state::<Codex>();
             let current=codex.session.lock().unwrap().as_ref().is_some_and(|s|s.generation==generation&&s.approvals.contains_key(&request_id));
-            if current { let result=codex.decide(&app,&request_id,allow);crate::actions::audit(&action,if result.is_ok(){"success"}else{"failure"}); }
+            if current { let result=codex.decide(&app,generation,&request_id,allow);crate::actions::audit(&action,if result.is_ok(){"success"}else{"failure"}); }
             else { app.state::<crate::actions::Approvals>().decide(&app,&action.id,false); }
         });
     }
@@ -183,6 +188,16 @@ fn emit(app: &AppHandle, s: &Session, kind: &str, detail: String, request_id: Op
 }
 
 fn decision(allow: bool) -> &'static str { if allow {"accept"} else {"decline"} }
+fn thread_parameters(cwd:&str)->Value {json!({"cwd":cwd,"sandbox":"readOnly","approvalPolicy":"unlessTrusted"})}
+fn accepts_event(thread:Option<&str>,turn:Option<&str>,p:&Value)->bool {
+    if p["threadId"].as_str().is_some_and(|id|Some(id)!=thread){return false}
+    let incoming=p["turnId"].as_str().or_else(||p["turn"]["id"].as_str());
+    !turn.is_some_and(|active|incoming.is_some_and(|id|id!=active))
+}
+fn take_scoped_approval(approvals:&mut HashMap<String,Value>,current:u64,expected:u64,id:&str)->Result<Value,String>{
+    if current!=expected{return Err("Codex session changed; stale decision blocked.".into())}
+    approvals.remove(id).ok_or("Codex approval expired or already resolved.".into())
+}
 fn can_approve(method: &str, thread: Option<&str>, turn: Option<&str>, params: &Value) -> bool {
     ["item/commandExecution/requestApproval","item/fileChange/requestApproval"].contains(&method)
         && thread.is_some() && turn.is_some() && params["threadId"].as_str() == thread && params["turnId"].as_str() == turn
@@ -190,6 +205,9 @@ fn can_approve(method: &str, thread: Option<&str>, turn: Option<&str>, params: &
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]fn official_thread_policy(){assert_eq!(thread_parameters("C:/test")["approvalPolicy"],"unlessTrusted");assert_eq!(thread_parameters("C:/test")["sandbox"],"readOnly");}
+    #[test]fn stale_turn_events_rejected(){assert!(!accepts_event(Some("thread"),Some("current"),&json!({"threadId":"thread","turn":{"id":"old"}})));assert!(accepts_event(Some("thread"),Some("current"),&json!({"threadId":"thread","turnId":"current"})));}
+    #[test]fn restarted_session_cannot_consume_old_allow(){let mut pending=HashMap::from([("same-id".into(),json!(7))]);assert!(take_scoped_approval(&mut pending,2,1,"same-id").is_err());assert_eq!(take_scoped_approval(&mut pending,2,2,"same-id").unwrap(),json!(7));assert!(take_scoped_approval(&mut pending,2,2,"same-id").is_err());}
     #[test] fn official_decisions_and_scoped_approvals() {
         let p = json!({"threadId":"thread","turnId":"turn"});
         assert_eq!(decision(true),"accept"); assert_eq!(decision(false),"decline");

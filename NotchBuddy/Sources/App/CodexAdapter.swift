@@ -16,6 +16,11 @@ final class CodexAdapter {
     private var turnID: String?
     private var initialPrompt = ""
     private var workspace = ""
+    private let approvalCenter: ActionApprovalCenter
+    private let eventSink: ((AgentEvent) -> Void)?
+    init(approvals: ActionApprovalCenter? = nil, onEvent: ((AgentEvent) -> Void)? = nil) {
+        approvalCenter = approvals ?? .shared; eventSink = onEvent
+    }
 
     func start(binary: String, cwd: String, prompt: String) {
         #if APPSTORE
@@ -49,7 +54,7 @@ final class CodexAdapter {
                 guard let self else { return }
                 guard case .success = result else { self.fail("Codex initialization failed. Check installation and authentication."); self.stop(); return }
                 self.send(["method": "initialized", "params": [:]])
-                self.request("thread/start", ["cwd": self.workspace, "sandbox": "readOnly", "approvalPolicy": "untrusted"]) { [weak self] result in
+                self.request("thread/start", CodexProtocol.threadParameters(cwd: self.workspace)) { [weak self] result in
                     guard let self else { return }
                     guard case .success(let value) = result, let thread = value["thread"] as? [String: Any], let id = thread["id"] as? String else {
                         self.fail("Codex thread failed. Sign in using codex login in your terminal."); self.stop(); return
@@ -57,6 +62,7 @@ final class CodexAdapter {
                     self.threadID = id
                     self.emit(.sessionStarted, "Codex: \(id)")
                     self.request("turn/start", ["threadId": id, "input": [["type": "text", "text": self.initialPrompt]]]) { [weak self] result in
+                        if case .success(let value) = result { self?.turnID = (value["turn"] as? [String: Any])?["id"] as? String }
                         if case .failure = result { self?.fail("Codex turn failed. Check installation and authentication.") }
                     }
                 }
@@ -66,7 +72,7 @@ final class CodexAdapter {
     }
 
     func stop() {
-        for id in Array(approvals.keys) { ActionApprovalCenter.shared.resolve("codex-" + generation.uuidString + "-" + id, allow: false) }
+        for id in Array(approvals.keys) { approvalCenter.resolve("codex-" + generation.uuidString + "-" + id, allow: false) }
         generation = UUID()
         approvals.removeAll(); callbacks.removeAll(); proposals.removeAll()
         process?.terminate(); process = nil; input = nil; buffer = Data()
@@ -117,12 +123,15 @@ final class CodexAdapter {
     private func handle(_ message: [String: Any]) {
         let method = message["method"] as? String ?? ""
         let p = message["params"] as? [String: Any] ?? [:]
-        if let incoming = p["threadId"] as? String, let threadID, incoming != threadID { return }
+        guard CodexProtocol.acceptsEvent(thread: threadID, turn: turnID, params: p) else {
+            if let id = message["id"] { send(["id": id, "result": ["decision": "decline"]]) }
+            return
+        }
         if method == "turn/started" { turnID = (p["turn"] as? [String: Any])?["id"] as? String; emit(.statusChanged, "Codex working") }
         if method == "turn/completed" {
             let turn = p["turn"] as? [String: Any] ?? [:]
             emit(turn["status"] as? String == "failed" ? .agentFailed : .agentCompleted, "Codex turn \(turn["status"] as? String ?? "ended")")
-            for id in Array(approvals.keys) { ActionApprovalCenter.shared.resolve("codex-" + generation.uuidString + "-" + id, allow: false) }
+            for id in Array(approvals.keys) { approvalCenter.resolve("codex-" + generation.uuidString + "-" + id, allow: false) }
             approvals.removeAll(); turnID = nil
             if AppState.shared.pendingApproval?.provider == "codex" { AppState.shared.pendingApproval = nil; AppState.shared.isPinned = false }
         }
@@ -141,10 +150,11 @@ final class CodexAdapter {
         }
         if method == "serverRequest/resolved", let id = p["requestId"] {
             let key = String(describing: id); approvals.removeValue(forKey: key)
-            ActionApprovalCenter.shared.resolve("codex-" + generation.uuidString + "-" + key, allow: false)
+            approvalCenter.resolve("codex-" + generation.uuidString + "-" + key, allow: false)
         }
         guard let id = message["id"] else { return }
         let key = String(describing: id)
+        guard approvals[key] == nil else { return } // A repeated frame cannot replace an outstanding decision.
         guard ["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].contains(method) else {
             // Unknown server requests never gain consent or invoke local tools.
             send(["id": id, "error": ["code": -32601, "message": "Unsupported client request"]]); return
@@ -167,7 +177,7 @@ final class CodexAdapter {
         let currentGeneration = generation
         let action = ActionRequest(id: "codex-" + generation.uuidString + "-" + key, provider: "codex", integration: "codex", operation: method, parameters: ["action": preview], risk: .critical)
         let info = ApprovalInfo(sessionId: threadID ?? "", tool: "Codex", command: action.preview, provider: "actions", requestID: action.id)
-        ActionApprovalCenter.shared.enqueueLegacy(action, info: info) { [weak self] decision in
+        approvalCenter.enqueueLegacy(action, info: info) { [weak self] decision in
             if self?.generation == currentGeneration { self?.decide(decision, requestID: key) }
         }
         emit(.permissionRequested, preview)
@@ -175,6 +185,7 @@ final class CodexAdapter {
 
     private func fail(_ message: String) { emit(.agentFailed, message); AppState.shared.noteMessage = message; AppState.shared.view = .note }
     private func emit(_ kind: AgentEventKind, _ detail: String) {
+        if let eventSink { eventSink(AgentEvent(provider: "codex", session: threadID ?? "", kind: kind, detail: detail)); return }
         let state = AppState.shared
         state.lastAgentEvent = AgentEvent(provider: "codex", session: threadID ?? "", kind: kind, detail: detail)
         if !state.tasks.contains(where: { $0.id == "integration_codex" }) {

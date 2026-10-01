@@ -11,6 +11,7 @@ final class CodexAdapter {
     private var sequence = 0
     private var callbacks: [Int: (Result<[String: Any], Error>) -> Void] = [:]
     private var approvals: [String: Any] = [:]
+    private var seenApprovalIDs: Set<String> = []
     private var proposals: [String: String] = [:]
     private var threadID: String?
     private var turnID: String?
@@ -74,7 +75,7 @@ final class CodexAdapter {
     func stop() {
         for id in Array(approvals.keys) { approvalCenter.resolve("codex-" + generation.uuidString + "-" + id, allow: false) }
         generation = UUID()
-        approvals.removeAll(); callbacks.removeAll(); proposals.removeAll()
+        approvals.removeAll(); seenApprovalIDs.removeAll(); callbacks.removeAll(); proposals.removeAll()
         process?.terminate(); process = nil; input = nil; buffer = Data()
         if threadID != nil { emit(.sessionEnded, "Codex stopped") }
         threadID = nil; turnID = nil
@@ -154,11 +155,12 @@ final class CodexAdapter {
         }
         guard let id = message["id"] else { return }
         let key = String(describing: id)
-        guard approvals[key] == nil else { return } // A repeated frame cannot replace an outstanding decision.
+        guard !seenApprovalIDs.contains(key) else { return } // Replays cannot repeat resolved decisions.
         guard ["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].contains(method) else {
             // Unknown server requests never gain consent or invoke local tools.
             send(["id": id, "error": ["code": -32601, "message": "Unsupported client request"]]); return
         }
+        seenApprovalIDs.insert(key)
         let state = AppState.shared
         guard CodexProtocol.canApprove(method: method, thread: threadID, turn: turnID, params: p), state.isPresent else {
             send(["id": id, "result": ["decision": "decline"]]); return

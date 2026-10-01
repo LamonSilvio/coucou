@@ -5,6 +5,8 @@ import { Bridge, IS_TAURI, onEvent } from "./core/bridge";
 import { Sound } from "./core/sound";
 import { State, type Settings } from "./core/state";
 import { Island } from "./island/island";
+import { registerAgentHandlers } from "./island/agents";
+import { registerApprovalHandlers } from "./island/approvals";
 import { registerHookHandlers } from "./island/hooks";
 import { registerIntegrationHandlers, refreshConfigured } from "./island/integrations";
 
@@ -60,7 +62,10 @@ async function main() {
     void refreshConfigured();
   });
 
+  await onEvent<string>("chat-tool", tool => { State.activeAITool = tool; State.notify(); });
+  registerApprovalHandlers(island);
   registerHookHandlers(island);
+  registerAgentHandlers(island);
   registerIntegrationHandlers(island);
 
   island.launch();

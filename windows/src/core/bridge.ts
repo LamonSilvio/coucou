@@ -15,7 +15,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T |
   try {
     return await invoke<T>(cmd, args);
   } catch (err) {
-    console.error(`[coucou] ${cmd} failed`, err);
+    console.error(`[coucou] ${cmd} failed`);
     return null;
   }
 }
@@ -31,7 +31,7 @@ export interface BootInfo {
 export const Bridge = {
   boot: () => call<BootInfo>("boot"),
 
-  saveSettings: (settings: Settings) => call<void>("save_settings", { settings }),
+  saveSettings: (settings: Settings) => callOrThrow<void>("save_settings", { settings }),
 
   /** Shrink the window down to the invisible wake strip (hidden) or back to full. */
   setCollapsed: (collapsed: boolean) => call<void>("set_collapsed", { collapsed }),
@@ -78,10 +78,18 @@ export const Bridge = {
   /** "Nobody can act on this" — Claude Code asks in the terminal right away. */
   approvalDecline: (requestId: string) => call<void>("approval_decline", { requestId }),
 
+  codexStart: (binary: string, cwd: string, prompt: string) => callOrThrow<void>("codex_start", {binary,cwd,prompt}),
+  codexStop: () => call<void>("codex_stop"),
+  actionDecide:(id:string,allow:boolean)=>callOrThrow<void>("action_decide",{id,allow}),
+  actionCancel:()=>call<void>("action_cancel"),
+  imageSave:(image:string)=>callOrThrow<string>("image_save",{image}),
+  codexDecide: (requestId: string, allow: boolean) => callOrThrow<void>("codex_decide", {requestId,allow}),
+
   // ── Chat, files, secrets ──────────────────────────────────────────────────
   /** One chat turn. The API key and any file bytes never leave Rust. */
   chatSend: (query: string, context: ChatContext | null) =>
-    callOrThrow<{ text: string }>("chat_send", { query, context }),
+    callOrThrow<{ text: string; provider: string; sources: {title:string;url:string}[]; artifacts: {containerId:string;fileId:string;filename:string}[];images:string[] }>("chat_send", { query, context }),
+  downloadArtifact: (container: string, file: string) => callOrThrow<string>("openai_download_artifact", {container,file}),
   chatReset: () => call<void>("chat_reset"),
   /** Copies a dropped file into the inbox. */
   ingestFile: (path: string) => callOrThrow<DroppedFile>("ingest_file", { path }),

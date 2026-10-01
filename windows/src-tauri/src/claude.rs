@@ -66,6 +66,10 @@ pub enum ChatContext {
 #[serde(rename_all = "camelCase")]
 pub struct ChatReply {
     pub text: String,
+    pub provider: &'static str,
+    pub sources: Vec<crate::openai::Source>,
+    pub artifacts: Vec<crate::openai::Artifact>,
+    pub images: Vec<String>,
 }
 
 /// One chat turn. Returns the assistant's text, or a message the island shows
@@ -154,7 +158,7 @@ pub async fn send(
     if text.is_empty() {
         return Err("No response text.".into());
     }
-    Ok(ChatReply { text })
+    Ok(ChatReply { text, provider: "Anthropic", sources: vec![], artifacts: vec![], images:vec![] })
 }
 
 async fn call(key: &str, body: &Value) -> Result<Value, String> {
@@ -178,15 +182,7 @@ async fn call(key: &str, body: &Value) -> Result<Value, String> {
     let text = response.text().await.map_err(|e| e.to_string())?;
     if !status.is_success() {
         // Surface the API's own message, which is what makes a bad key obvious.
-        let detail = serde_json::from_str::<Value>(&text)
-            .ok()
-            .and_then(|v| {
-                v.get("error")
-                    .and_then(|e| e.get("message"))
-                    .and_then(Value::as_str)
-                    .map(str::to_string)
-            })
-            .unwrap_or_else(|| text.chars().take(200).collect());
+        let detail = "Request failed. Check API credentials, quota and model availability.";
         return Err(format!("Claude API {status}: {detail}"));
     }
     serde_json::from_str(&text).map_err(|e| format!("Bad API response: {e}"))

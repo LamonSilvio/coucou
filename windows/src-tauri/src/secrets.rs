@@ -8,6 +8,8 @@ const SERVICE: &str = "fr.louisraille.coucou";
 /// Every key Coucou may store. Anything outside this list is refused.
 pub const KNOWN_KEYS: &[&str] = &[
     "anthropic-api-key",
+    "openai-api-key",
+    "n8n-webhook-token",
     "n8n-url",
     "n8n-api-key",
     "vercel-token",
@@ -19,7 +21,7 @@ pub const KNOWN_KEYS: &[&str] = &[
 ];
 
 fn entry(key: &str) -> Option<Entry> {
-    if !KNOWN_KEYS.contains(&key) {
+    if !KNOWN_KEYS.contains(&key) && !(key.starts_with("mcp-token-") && key[10..].len() <= 32 && crate::openai::safe_id(&key[10..])) {
         return None;
     }
     Entry::new(SERVICE, key).ok()
@@ -48,4 +50,26 @@ pub fn clear(key: &str) -> Result<(), String> {
 
 pub fn present(key: &str) -> bool {
     get(key).is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test] fn unknown_keys_are_rejected() {
+        assert!(entry("unregistered-secret").is_none());
+        assert!(KNOWN_KEYS.contains(&"openai-api-key"));
+    }
+    #[test] fn credential_manager_round_trip() {
+        let account = format!("coucou-test-{}",std::process::id());
+        let entry = Entry::new(SERVICE,&account).unwrap();
+        entry.set_password("unit-test-value").unwrap();
+        assert_eq!(entry.get_password().unwrap(),"unit-test-value");
+        entry.delete_credential().unwrap();
+        assert!(entry.get_password().is_err());
+    }
+    #[test] fn mcp_dynamic_account_round_trip() {
+        let account=format!("mcp-token-test{}",std::process::id());
+        set(&account,"mock-mcp-credential").unwrap();assert_eq!(get(&account).as_deref(),Some("mock-mcp-credential"));clear(&account).unwrap();assert!(get(&account).is_none());
+        assert!(entry("mcp-token-../../anthropic-api-key").is_none());
+    }
 }

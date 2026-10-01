@@ -59,7 +59,7 @@ struct OverviewView: View {
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                                     .layoutPriority(1)
-                                Text(agent.source == .claudeCode ? "Claude Code" : "n8n")
+                                Text(agent.source == .codex ? "Codex" : agent.source == .claudeCode ? "Claude Code" : "n8n")
                                     .font(.system(size: 11))
                                     .foregroundColor(Color(hex: "#8E939C"))
                                     .lineLimit(1)
@@ -88,7 +88,7 @@ struct OverviewView: View {
                 }
 
                 // ↗ jump button — last in ZStack so it renders on top; hidden while any detail is open
-                if !showingN8nDetail {
+                if !showingN8nDetail && agent?.source != .codex {
                     Button(action: { openAgentTarget(agent) }) {
                         Image(systemName: "arrow.up.right")
                             .font(.system(size: 8, weight: .medium))
@@ -114,7 +114,7 @@ struct OverviewView: View {
     }
 
     private func openAgentTarget(_ task: AgentTask?) {
-        guard let task else { return }
+        guard let task, task.source != .codex else { return }
         switch task.id {
         case "integration_claude":
             let vscodeBundleId = "com.microsoft.VSCode"
@@ -177,7 +177,7 @@ struct EmptyStateView: View {
                         .foregroundColor(Color(hex: "#9398A1"))
                 }
                 Spacer()
-                PrimaryButton("Ask Claude") {
+                PrimaryButton("Ask \(AIChatRouter.shared.label)") {
                     state.view = .prompt
                 }
             }
@@ -195,20 +195,26 @@ struct ApprovalView: View {
     var approval: ApprovalInfo? { state.pendingApproval }
 
     var body: some View {
+        let requestID = approval?.requestID
         ZStack {
             CardBackground(wash: .amber)
             VStack(alignment: .leading, spacing: 5) {
                 AgentWho(task: state.focusTask, label: "needs permission")
-                CodeBlock(text: approval?.command ?? approval?.tool ?? "…")
+                if approval?.command.contains("Risk: CRITICAL") == true {
+                    Text("CRITICAL — explicit consent required").font(.system(size: 11, weight: .bold)).foregroundColor(.red)
+                }
+                if ["codex", "actions"].contains(approval?.provider ?? "") {
+                    ScrollView { Text(approval?.command ?? "…").font(.system(size: 11, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 55)
+                } else { CodeBlock(text: approval?.command ?? approval?.tool ?? "…") }
                 HStack(spacing: 8) {
                     SecondaryButton("Deny") {
-                        HookServer.shared.sendApprovalDecision("deny")
+                        decide("deny", requestID: requestID)
                     }
                     PrimaryButton("Allow") {
-                        HookServer.shared.sendApprovalDecision("allow")
+                        decide("allow", requestID: requestID)
                     }
-                    SecondaryButton("Always") {
-                        HookServer.shared.sendApprovalDecision("always")
+                    if approval?.provider == "claudeCode" {
+                        SecondaryButton("Always") { decide("always", requestID: requestID) }
                     }
                 }
             }
@@ -218,6 +224,13 @@ struct ApprovalView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+    private func decide(_ decision: String, requestID: String?) {
+        guard requestID == state.pendingApproval?.requestID else { return }
+        if let approval, approval.provider == "actions" {
+            ActionApprovalCenter.shared.resolve(approval.requestID, allow: decision == "allow")
+        } else { HookServer.shared.sendApprovalDecision(decision) }
+    }
+
 }
 
 // MARK: - Question
@@ -283,11 +296,12 @@ struct FinishedView: View {
         ZStack {
             CardBackground(wash: .green)
             VStack(alignment: .leading, spacing: 5) {
-                AgentWho(task: state.focusTask, label: "Claude Code finished")
+                AgentWho(task: state.focusTask, label: state.focusTask?.source == .codex ? "Codex finished" : "Claude Code finished")
                 Text(state.focusTask?.steps.last ?? "Session finished")
                     .font(.system(size: 15, weight: .semibold))
                 HStack(spacing: 8) {
                     #if !APPSTORE
+                    if state.focusTask?.source != .codex {
                     PrimaryButton("Open terminal") {
                         let terminalBundleIds = ["com.apple.Terminal", "com.googlecode.iterm2", "net.kovidgoyal.kitty", "com.mitchellh.ghostty"]
                         let activated = terminalBundleIds.compactMap { id in
@@ -297,6 +311,7 @@ struct FinishedView: View {
                             NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
                         }
                         NotificationCenter.default.post(name: .islandCollapse, object: nil)
+                    }
                     }
                     #endif
                     SecondaryButton("OK") {
@@ -757,8 +772,13 @@ struct PromptView: View {
                     Spacer()
                 }
 
+                Text(state.activeAITool ?? AIChatRouter.shared.label)
+                    .font(.system(size: 10)).foregroundColor(.secondary)
+                if state.stateOverride != nil && AIChatRouter.shared.label == "OpenAI" {
+                    Button("Cancel OpenAI run") { OpenAIService.shared.cancel() }.font(.caption)
+                }
                 HStack(spacing: 8) {
-                    TextField(state.chatHistory.isEmpty ? "Ask me anything…" : "Continue…", text: $text)
+                    TextField(state.chatHistory.isEmpty ? "Ask \(AIChatRouter.shared.label)…" : "Continue…", text: $text)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .focused($focused)
@@ -788,13 +808,13 @@ struct PromptView: View {
 
     private func sendMessage() {
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return }
+        guard !query.isEmpty, state.stateOverride != .thinking else { return }
         text = ""
         focused = false
         state.chatHistory.append(ChatMessage(role: .user, content: query))
         state.stateOverride = .thinking
         Task {
-            await ClaudeService.shared.chat(query: query, context: state.promptContext, state: state)
+            await AIChatRouter.shared.chat(query: query, context: state.promptContext, state: state)
             await MainActor.run { focused = true }
         }
     }
@@ -817,11 +837,24 @@ struct ChatBubble: View {
                     .background(Color.white.opacity(0.13))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
+                VStack(alignment: .leading, spacing: 5) {
+                Text(message.provider).font(.system(size: 10, weight: .semibold)).foregroundColor(Color(hex: "#8E939C"))
+                ForEach(Array(message.images.enumerated()), id: \.offset) { _, encoded in
+                    if let data = Data(base64Encoded: encoded), let image = NSImage(data: data) {
+                        Image(nsImage: image).resizable().scaledToFit().frame(maxHeight: 180)
+                        Button("Save Image") { ImageWorkflow.save(encoded) }
+                    }
+                }
                 Text(message.content)
                     .font(.system(size: 12.5))
                     .foregroundColor(Color(hex: "#B0B5BE"))
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                ForEach(message.sources) { source in Link(source.title, destination: source.url).font(.system(size: 11)) }
+                ForEach(message.artifacts) { artifact in
+                    Button("Save \(artifact.filename)") { Task { await OpenAIService.shared.saveArtifact(artifact) } }.font(.system(size: 11))
+                }
+                }
                 Spacer(minLength: 8)
             }
         }
@@ -995,7 +1028,7 @@ struct IntegrationCardView: View {
 
     // VS Code with active session: show ticker layout (same as overview)
     private var vsCodeSessionActive: Bool {
-        task.id == "integration_claude" && (task.state != .idle || !task.steps.isEmpty)
+        (task.id == "integration_claude" || task.source == .codex) && (task.state != .idle || !task.steps.isEmpty)
     }
 
     // n8n with a finished execution: show result row instead of "Open n8n" button
@@ -1077,7 +1110,7 @@ struct IntegrationCardView: View {
                         .foregroundColor(Color(hex: "#F5F6F8"))
                         .lineLimit(1).truncationMode(.tail)
                         .layoutPriority(1)
-                    Text("Claude Code")
+                    Text(task.source == .codex ? "Codex" : "Claude Code")
                         .font(.system(size: 11))
                         .foregroundColor(Color(hex: "#8E939C"))
                         .lineLimit(1).truncationMode(.tail)

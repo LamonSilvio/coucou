@@ -25,11 +25,13 @@ Approve permissions, watch your agents work, drop a file, chat with Claude — a
 ## Why
 
 Some studios showed off gorgeous notch companions… and never let anyone use them.
-**Coucou is the open version.** Every line of code, every animation, every sound — free to use, read, fork and remix.
+**Coucou is the open version.** Source code is MIT-licensed. The names, character, icons, sounds and media have separate restrictions in [LICENSE-ASSETS.md](LICENSE-ASSETS.md); distributing a fork with these assets requires written permission.
 
 Meet **Mochi**: a soft little squircle with big eyes that pops out of your notch, waves hello, follows your cursor with its eyes, gets annoyed when you poke it (and dizzy if you insist), and tells you the moment Claude Code needs you.
 
 ## Features
+
+This fork adds **OpenAI Responses chat** and optional **Codex app-server sessions** alongside the existing Claude support. Settings select Anthropic, OpenAI or Auto and keep API keys separately in OS secure storage. Optional additions include image generation/editing with chosen export, remote MCP discovery/calls, approved integration writes, and restricted browser Computer Use (**OFF by default**). Effects share a queued SAFE/CONFIRM/CRITICAL approval pipeline. See [OpenAI setup](docs/OPENAI.md), [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [Computer Use](docs/COMPUTER_USE.md), [MCP](docs/MCP.md), [write tools](docs/TOOLS.md) and [verified validation](docs/VALIDATION.md). Credentialed API and physical desktop acceptance tests remain required; mocks and builds are not live success claims.
 
 - 🤖 **Claude Code, live** — see every session in your notch: what it reads, edits and runs, step by step. Finished? Mochi does a happy little jump.
 - ✅ **Approve from the notch** — Claude Code permission requests show up with **Allow / Deny**. One click, back to work.

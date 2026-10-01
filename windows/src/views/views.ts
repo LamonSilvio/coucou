@@ -175,7 +175,7 @@ function buildOverview(actions: ViewActions): ViewHost {
       // VS Code with a live Claude Code session keeps the ticker; every other
       // pill shows its own card, exactly like IntegrationCardView.
       const sessionActive =
-        task?.id === "integration_claude" && (task.state !== "idle" || task.steps.length > 0);
+        (task?.id === "integration_claude" || task?.source === "codex") && (task.state !== "idle" || task.steps.length > 0);
 
       if (task && sessionActive) {
         if (mode !== "ticker") {
@@ -188,7 +188,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         who.append(
           dot(task.color, 7),
           h("span", { class: "name", text: task.name }),
-          h("span", { class: "tool", text: task.source === "claudeCode" ? "Claude Code" : "n8n" }),
+          h("span", { class: "tool", text: task.source === "codex" ? "Codex" : task.source === "claudeCode" ? "Claude Code" : "n8n" }),
         );
         if (task.steps.length > 1) {
           who.append(h("span", {
@@ -212,7 +212,7 @@ function buildOverview(actions: ViewActions): ViewHost {
         }
       }
 
-      jump.style.display = detailOpen ? "none" : "";
+      jump.style.display = detailOpen || task?.source === "codex" ? "none" : "";
 
       const others = State.otherTasks.slice(0, 4);
       const pillKey = others.map((t) => `${t.id}:${t.pillBadge ?? ""}`).join("|");
@@ -299,19 +299,25 @@ function buildApproval(actions: ViewActions): ViewHost {
     sync() {
       clear(who);
       who.append(agentWho(State.focusTask, "needs permission"));
+      if (State.pendingApproval?.command.includes("Risk: CRITICAL")) who.append(h("div",{text:"CRITICAL — explicit consent required",style:"color:#f4505e;font-weight:700;font-size:11px"}));
       // The whole point of approving here rather than in the terminal: this line
       // is the command, the file path or the URL being authorised, not just the
       // name of the tool asking.
+      const codex = ["codex", "actions"].includes(State.pendingApproval?.provider ?? "");
+      code.style.whiteSpace = codex ? "pre-wrap" : "";
+      code.style.maxHeight = codex ? "65px" : "";
+      code.style.overflow = codex ? "auto" : "";
       code.textContent = State.pendingApproval?.command || State.pendingApproval?.tool || "…";
       // Two buttons, built once. Rebuilding them between a mouse-down and a
       // mouse-up would swallow the click, and there is nothing left to vary:
       // "Always" is gone until the remembered-rules list exists to back it.
-      if (rowKey === "built") return;
-      rowKey = "built";
+      const id = State.pendingApproval?.requestId ?? "";
+      if (rowKey === id) return;
+      rowKey = id;
       clear(row);
       row.append(
-        btn("Deny", "secondary", () => actions.decide("deny"), "N"),
-        btn("Allow", "primary", () => actions.decide("allow"), "Y"),
+        btn("Deny", "secondary", () => { if (State.pendingApproval?.requestId === id) actions.decide("deny"); }, "N"),
+        btn("Allow", "primary", () => { if (State.pendingApproval?.requestId === id) actions.decide("allow"); }, "Y"),
       );
     },
   };
@@ -365,8 +371,9 @@ function buildError(actions: ViewActions): ViewHost {
 function buildFinished(actions: ViewActions): ViewHost {
   const who = h("div");
   const title = h("div", { class: "title" });
+  const terminal = btn("Open terminal", "primary", () => actions.openTerminal());
   const row = h("div", { class: "actions" },
-    btn("Open terminal", "primary", () => actions.openTerminal()),
+    terminal,
     btn("OK", "secondary", () => actions.collapse()),
   );
   const el = h("div", { class: "view" }, card("green", stack(116, 16, who, title, row)));
@@ -374,7 +381,8 @@ function buildFinished(actions: ViewActions): ViewHost {
     el,
     sync() {
       clear(who);
-      who.append(agentWho(State.focusTask, "Claude Code finished"));
+      who.append(agentWho(State.focusTask, State.focusTask?.source === "codex" ? "Codex finished" : "Claude Code finished"));
+      terminal.hidden = State.focusTask?.source === "codex";
       title.textContent = State.focusTask?.steps.at(-1) ?? "Session finished";
     },
   };

@@ -3,7 +3,7 @@
 import type { BotEmoteName, BotStateName, IslandMode, IslandViewName } from "./layout";
 import type { EyeShape } from "../mochi/engine";
 
-export type AgentSource = "claudeCode" | "n8n";
+export type AgentSource = "claudeCode" | "codex" | "n8n";
 export type PillBadge = "approval" | "finished" | "error";
 
 export interface AgentTask {
@@ -22,6 +22,7 @@ export interface AgentTask {
 }
 
 export interface ApprovalInfo {
+  provider?: "claudeCode" | "codex" | "actions";
   requestId: string;
   sessionId: string;
   tool: string;
@@ -32,6 +33,10 @@ export interface ChatMessage {
   id: number;
   role: "user" | "assistant";
   content: string;
+  provider?: string;
+  sources?: {title:string;url:string}[];
+  artifacts?: {containerId:string;fileId:string;filename:string}[];
+  images?: string[];
 }
 
 export type PromptContext =
@@ -92,6 +97,12 @@ export interface Settings {
   hooksInstalled: boolean;
   /** Claude model used by the chat. */
   model: string;
+  aiProvider: "anthropic" | "openai" | "auto";
+  openaiModel: string; openaiReasoning: string; openaiMaxTokens: number;
+  openaiWebSearch: boolean; openaiCodeInterpreter: boolean; openaiIntegrations: boolean;
+  openaiWrites:boolean; openaiImages:boolean; openaiComputer:boolean;
+  openaiImageModel:string; openaiImageSize:string; openaiImageTransparent:boolean; computerTarget:string;
+  mcpServers:{name:string;endpoint:string;enabled:boolean;tools:string[]}[]; n8nWebhook:string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -106,6 +117,9 @@ export const DEFAULT_SETTINGS: Settings = {
   autostart: false,
   hooksInstalled: false,
   model: "claude-opus-5",
+  aiProvider: "anthropic", openaiModel: "", openaiReasoning: "", openaiMaxTokens: 4096,
+  openaiWebSearch: false, openaiCodeInterpreter: false, openaiIntegrations: false,
+  openaiWrites:false,openaiImages:false,openaiComputer:false,openaiImageModel:"",openaiImageSize:"auto",openaiImageTransparent:false,computerTarget:"msedge",mcpServers:[],n8nWebhook:"",
 };
 
 type Listener = () => void;
@@ -137,6 +151,8 @@ class AppState {
   searchResult: SearchResult | null = null;
   chatHistory: ChatMessage[] = [];
   pendingApproval: ApprovalInfo | null = null;
+  activeAITool: string | null = null;
+  lastAgentEvent: import("./agent-events").AgentEvent | null = null;
 
   integrations: Record<string, IntegrationInfo> = {};
 

@@ -171,6 +171,86 @@ function claudeSection(status: HookStatus): HTMLElement {
   return section;
 }
 
+function codexSection(): HTMLElement {
+  const binary = h("input", {placeholder:"Absolute path to official codex.exe"}) as HTMLInputElement;
+  const cwd = h("input", {placeholder:"Absolute project folder"}) as HTMLInputElement;
+  const prompt = h("input", {placeholder:"Task for Codex"}) as HTMLInputElement;
+  const feedback = h("div", {});
+  const start = h("button", {text:"Start Codex"});
+  start.addEventListener("click", async () => {
+    try { await Bridge.codexStart(binary.value,cwd.value,prompt.value); feedback.textContent="Codex started. Watch the island."; }
+    catch { feedback.textContent="Codex could not start. Check executable, project folder and codex login."; }
+  });
+  const stop = h("button", {text:"Stop Codex",onclick:() => void Bridge.codexStop()});
+  return h("section", {}, h("h2", {text:"Codex Integration (optional)"}),
+    h("div", {class:"hint",text:"Sign in with codex login in your terminal first. Starts a dedicated read-only sandbox session. Official approvals appear in the island."}),
+    binary,cwd,prompt,h("div", {class:"row"},start,stop),feedback);
+}
+
+function providerSection(): HTMLElement {
+  const select = h("select", {}) as HTMLSelectElement;
+  for (const id of ["anthropic", "openai", "auto"] as const) select.append(h("option", {value:id,text:id === "auto" ? "Auto (Anthropic first)" : id}));
+  select.value = settings.aiProvider;
+  select.addEventListener("change", () => { settings.aiProvider = select.value as Settings["aiProvider"]; void save(); });
+  const model = h("input", {placeholder:"Model (blank = catalog default)", value:settings.openaiModel}) as HTMLInputElement;
+  model.addEventListener("change", () => { settings.openaiModel = model.value.trim(); void save(); });
+  const reasoning = h("select", {}) as HTMLSelectElement;
+  for (const id of ["", "low", "medium", "high"]) reasoning.append(h("option", {value:id,text:id || "Model default"}));
+  reasoning.value = settings.openaiReasoning;
+  reasoning.addEventListener("change", () => { settings.openaiReasoning = reasoning.value; void save(); });
+  const tokens = h("input", {type:"number",min:256,max:32768,value:settings.openaiMaxTokens}) as HTMLInputElement;
+  tokens.addEventListener("change", () => { settings.openaiMaxTokens = Math.max(256,Math.min(32768,Number(tokens.value) || 4096)); void save(); });
+  return h("section", {}, h("h2", {text:"AI Provider"}),
+    h("div", {class:"row"},h("label", {text:"Provider"}),select),
+    h("div", {class:"hint",text:"Changing provider starts a new conversation. Auto never retries on another provider."}),
+    h("div", {class:"row"},h("label", {text:"OpenAI Model"}),model),
+    h("div", {class:"row"},h("label", {text:"Reasoning"}),reasoning),
+    h("div", {class:"row"},h("label", {text:"Max output tokens"}),tokens),
+    h("div", {class:"row"},h("label", {text:"Web Search"}),toggle(settings.openaiWebSearch,v => {settings.openaiWebSearch=v; void save();})),
+    h("div", {class:"row"},h("label", {text:"Code Interpreter (API charges apply)"}),toggle(settings.openaiCodeInterpreter,v => {settings.openaiCodeInterpreter=v; void save();})),
+    h("div", {class:"row"},h("label", {text:"Integration status tool (read only)"}),toggle(settings.openaiIntegrations,v => {settings.openaiIntegrations=v; void save();})),
+    h("div", {class:"row"},h("label", {text:"External writes — explicit approval"}),toggle(settings.openaiWrites,v => {settings.openaiWrites=v; void save();})),
+    h("div", {class:"row"},h("label", {text:"Image generation / editing (API charges)"}),toggle(settings.openaiImages,v => {settings.openaiImages=v; void save();})),
+    textSetting("Image model (blank = catalog default)", "openaiImageModel"),
+    textSetting("Image size: auto / 1024x1024 / 1536x1024 / 1024x1536", "openaiImageSize"),
+    h("div", {class:"row"},h("label", {text:"Transparent background"}),toggle(settings.openaiImageTransparent,v => {settings.openaiImageTransparent=v; void save();})),
+    h("div", {class:"row"},h("label", {text:"Computer Use (OFF by default)"}),toggle(settings.openaiComputer,v => {settings.openaiComputer=v; void save();})),
+    textSetting("Controlled browser: msedge / chrome / firefox", "computerTarget"),
+    h("div", {class:"hint",text:"Requires a computer-capable catalog model. Each click/type/key action and screenshot transmission requires explicit approval. Keep credentials off the primary display. No arbitrary scripts or terminal control."}),
+    mcpSettings(),textSetting("Fixed n8n production webhook HTTPS URL, no secrets", "n8nWebhook"),secureToken("n8n-webhook-token"));
+}
+
+function textSetting(label:string,key:"openaiImageModel"|"openaiImageSize"|"computerTarget"|"n8nWebhook") {
+  const input=h("input",{value:settings[key]}) as HTMLInputElement;
+  input.addEventListener("change",()=>{settings[key]=input.value.trim();void save();});
+  return h("div",{class:"row"},h("label",{text:label}),input);
+}
+function secureToken(account:string) {
+  const input=h("input",{type:"password",placeholder:"Token (secure storage)"}) as HTMLInputElement;
+  const feedback=h("div",{class:"hint"});
+  const button=h("button",{text:"Save token"});
+  button.addEventListener("click",async()=>{try{await Bridge.secretSet(account,input.value);input.value="";feedback.textContent="Token saved in Credential Manager.";}catch{feedback.textContent="Could not save token.";}});
+  const remove=h("button",{text:"Remove token",onclick:()=>void Bridge.secretClear(account)});
+  return h("div",{},input,button,remove,feedback);
+}
+function mcpSettings() {
+  const config=h("textarea",{style:"width:100%;height:120px"}) as HTMLTextAreaElement;
+  config.value=JSON.stringify(settings.mcpServers,null,2);
+  const label=h("input",{placeholder:"Server name for secure token"}) as HTMLInputElement;
+  const token=h("input",{type:"password",placeholder:"MCP authorization token"}) as HTMLInputElement;
+  const feedback=h("div",{class:"hint"});
+  const saveConfig=h("button",{text:"Save MCP servers / reconnect"});
+  saveConfig.addEventListener("click",async()=>{
+    try { const servers=JSON.parse(config.value);if(!Array.isArray(servers))throw Error();settings.mcpServers=servers;await Bridge.saveSettings(settings);await Bridge.chatReset();feedback.textContent="Saved. Discovery occurs on next chat. All calls require approval."; }
+    catch { feedback.textContent="Invalid MCP configuration. Consult docs/MCP.md."; }
+  });
+  const saveToken=h("button",{text:"Save MCP token"});
+  saveToken.addEventListener("click",async()=>{try{if(!/^[\w-]{1,32}$/.test(label.value))throw Error();await Bridge.secretSet("mcp-token-"+label.value,token.value);token.value="";feedback.textContent="MCP token saved securely.";}catch{feedback.textContent="Invalid name or secure storage failure.";}});
+  return h("div",{},h("h3",{text:"Remote MCP"}),h("div",{class:"hint",text:"JSON entries: name, endpoint (HTTPS, no embedded token), enabled, tools (allowlist). Ask the chat to list MCP tools for discovery. Tokens must not appear in JSON."}),config,saveConfig,label,token,saveToken,
+    h("button",{text:"Remove MCP token",onclick:()=>{if(/^[\w-]{1,32}$/.test(label.value))void Bridge.secretClear("mcp-token-"+label.value);}}),
+    h("button",{text:"Disconnect / cancel",onclick:()=>{void Bridge.actionCancel();}}),feedback);
+}
+
 // ── Claude API section ────────────────────────────────────────────────────────
 
 const MODELS: [string, string][] = [
@@ -179,7 +259,7 @@ const MODELS: [string, string][] = [
   ["claude-haiku-4-5", "Claude Haiku 4.5"],
 ];
 
-function apiSection(hasKey: boolean): HTMLElement {
+function apiSection(hasKey: boolean, provider: "anthropic" | "openai" = "anthropic"): HTMLElement {
   const dot = statusDot(hasKey);
   const state = h("span", { class: "hint", text: hasKey ? "Key saved in the Windows Credential Manager." : "No key yet — the chat needs one." });
 
@@ -196,7 +276,7 @@ function apiSection(hasKey: boolean): HTMLElement {
   const feedback = h("div", {});
 
   async function refresh() {
-    const present = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
+    const present = (await Bridge.secretPresent(`${provider}-api-key`)) ?? false;
     dot.style.background = present ? "#22c55e" : "#f4505e";
     state.textContent = present
       ? "Key saved in the Windows Credential Manager."
@@ -210,7 +290,7 @@ function apiSection(hasKey: boolean): HTMLElement {
     if (!value) return;
     clear(feedback);
     try {
-      await Bridge.secretSet("anthropic-api-key", value);
+      await Bridge.secretSet(`${provider}-api-key`, value);
       field.value = "";
       feedback.append(h("div", { class: "notice ok", text: "Saved. It never touches disk." }));
       await refresh();
@@ -222,7 +302,7 @@ function apiSection(hasKey: boolean): HTMLElement {
   clearBtn.addEventListener("click", async () => {
     clear(feedback);
     try {
-      await Bridge.secretClear("anthropic-api-key");
+      await Bridge.secretClear(`${provider}-api-key`);
       feedback.append(h("div", { class: "notice ok", text: "Key removed." }));
       await refresh();
     } catch (err) {
@@ -246,10 +326,10 @@ function apiSection(hasKey: boolean): HTMLElement {
   return h(
     "section",
     {},
-    h("h2", {}, dot, h("span", { text: "Claude" })),
+    h("h2", {}, dot, h("span", { text: provider === "openai" ? "OpenAI" : "Claude" })),
     state,
     h("div", { class: "row" }, h("label", { text: "API key" }), field, saveBtn, clearBtn),
-    h("div", { class: "row" }, h("label", { text: "Model" }), model),
+    ...(provider === "anthropic" ? [h("div", { class: "row" }, h("label", { text: "Model" }), model)] : []),
     feedback,
   );
 }
@@ -429,6 +509,7 @@ async function main() {
     installed: false, settingsPath: "", hookPath: "", hookReady: false,
   };
 
+  const hasOpenAIKey = (await Bridge.secretPresent("openai-api-key")) ?? false;
   const hasKey = (await Bridge.secretPresent("anthropic-api-key")) ?? false;
 
   const keys = [
@@ -442,7 +523,10 @@ async function main() {
   root.append(
     h("h1", {}, h("span", { text: "Coucou" }), h("span", { class: "version", text: version })),
     claudeSection(status),
+    providerSection(),
+    codexSection(),
     apiSection(hasKey),
+    apiSection(hasOpenAIKey, "openai"),
     integrationsSection(present),
     generalSection(),
     h("div", {

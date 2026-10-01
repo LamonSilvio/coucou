@@ -1,0 +1,30 @@
+{
+  "defaultModel": "gpt-4.1",
+  "defaultImageModel": "gpt-image-2.5-sunburst",
+  "imageModels": ["gpt-image-2.5-sunburst", "gpt-image-2.5-flare", "gpt-image-2", "gpt-image-1.5"],
+  "models": {
+    "gpt-4.1": {
+      "vision": true,
+      "tools": [
+        "web_search",
+        "code_interpreter",
+        "function", "mcp", "image_generation"
+      ],
+      "reasoning": []
+    },
+    "gpt-5": {
+      "vision": true,
+      "tools": [
+        "web_search",
+        "code_interpreter",
+        "function", "mcp", "image_generation"
+      ],
+      "reasoning": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "gpt-6.1-sol": {"vision":true,"tools":["web_search","code_interpreter","function","mcp","image_generation","computer"],"reasoning":["low","medium","high"]}
+  }
+}

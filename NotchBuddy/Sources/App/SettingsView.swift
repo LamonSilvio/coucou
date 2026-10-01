@@ -14,6 +14,30 @@ struct SettingsView: View {
     @State private var claudeAccessGranted: Bool = (UserDefaults.standard.data(forKey: "claudeDirectoryBookmark") != nil)
     #endif
 
+    @AppStorage("aiProvider") private var aiProvider = "anthropic"
+    @AppStorage("openaiModel") private var openaiModel = ""
+    @AppStorage("openaiReasoning") private var openaiReasoning = ""
+    @AppStorage("openaiMaxTokens") private var openaiMaxTokens = 4096
+    @AppStorage("openaiWebSearch") private var openaiWebSearch = false
+    @AppStorage("openaiIntegrations") private var openaiIntegrations = false
+    @AppStorage("openaiCodeInterpreter") private var openaiCodeInterpreter = false
+    @AppStorage("openaiWrites") private var openaiWrites = false
+    @AppStorage("openaiImages") private var openaiImages = false
+    @AppStorage("openaiComputer") private var openaiComputer = false
+    @AppStorage("openaiImageModel") private var openaiImageModel = ""
+    @AppStorage("openaiImageSize") private var openaiImageSize = "auto"
+    @AppStorage("openaiImageTransparent") private var openaiImageTransparent = false
+    @AppStorage("computerTarget") private var computerTarget = "com.apple.Safari"
+    @State private var mcpJSON = UserDefaults.standard.string(forKey: "mcpServers") ?? "[]"
+    @State private var mcpName = ""
+    @State private var mcpToken = ""
+    @AppStorage("n8nWebhook") private var n8nWebhook = ""
+    @State private var webhookToken = ""
+    @State private var openaiKey = ""
+    @AppStorage("codexBinary") private var codexBinary = ""
+    @State private var codexWorkspace = ""
+    @State private var codexPrompt = ""
+
     // Integration keys
     @State private var resendKey: String    = KeychainStore.shared.get("resend-api-key")  ?? ""
     @State private var resendFrom: String   = KeychainStore.shared.get("resend-from")     ?? ""
@@ -49,6 +73,98 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
 
+                GroupBox("AI Provider") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Provider", selection: $aiProvider) {
+                            Text("Anthropic").tag("anthropic")
+                            Text("OpenAI").tag("openai")
+                            Text("Auto (Anthropic first)").tag("auto")
+                        }
+                        Text("Changing provider starts a new conversation. Auto never retries on another provider.").font(.caption)
+                        Button("New conversation") { AIChatRouter.shared.reset() }
+                    }.padding(6)
+                }
+                GroupBox("OpenAI API") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SecureField("OpenAI API key", text: $openaiKey).textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button("Save key") {
+                                guard !openaiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                                guard KeychainStore.shared.set("openai-api-key", value: openaiKey.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                                    statusMessage = "Could not save OpenAI key in Keychain. Unlock your Mac and retry."
+                                    return
+                                }
+                                openaiKey = ""
+                                statusMessage = "OpenAI key saved in Keychain."
+                            }
+                            Button("Remove key") { KeychainStore.shared.remove("openai-api-key") }
+                        }
+                        TextField("Model (blank = catalog default)", text: $openaiModel).textFieldStyle(.roundedBorder)
+                        Picker("Reasoning", selection: $openaiReasoning) {
+                            Text("Model default").tag("")
+                            Text("Low").tag("low"); Text("Medium").tag("medium"); Text("High").tag("high")
+                        }
+                        Stepper("Max output tokens: \(openaiMaxTokens)", value: $openaiMaxTokens, in: 256...32768, step: 256)
+                        Toggle("Web Search", isOn: $openaiWebSearch)
+                        Toggle("Code Interpreter (API charges apply)", isOn: $openaiCodeInterpreter)
+                        Toggle("Integration status tool (read only)", isOn: $openaiIntegrations)
+                        Toggle("External writes (every write needs approval)", isOn: $openaiWrites)
+                        Toggle("Image generation / editing (API charges apply)", isOn: $openaiImages)
+                        TextField("Image model (blank = catalog default)", text: $openaiImageModel)
+                        Picker("Image size", selection: $openaiImageSize) {
+                            ForEach(["auto", "1024x1024", "1536x1024", "1024x1536"], id: \.self) { Text($0).tag($0) }
+                        }
+                        Toggle("Transparent image background", isOn: $openaiImageTransparent)
+                        #if !APPSTORE
+                        Toggle("Computer Use — explicit consent required", isOn: $openaiComputer)
+                        Picker("Controlled browser", selection: $computerTarget) {
+                            Text("Safari").tag("com.apple.Safari"); Text("Chrome").tag("com.google.Chrome")
+                            Text("Firefox").tag("org.mozilla.firefox"); Text("Edge").tag("com.microsoft.edgemac")
+                        }
+                        Text("OFF by default. Requires a computer-capable catalog model, Accessibility and Screen Recording. Every screenshot transmission and click/type/key action needs approval. Keep secrets off the primary display.").font(.caption)
+                        #else
+                        Text("Desktop Computer Use is unavailable in the App Store sandbox.").font(.caption)
+                        #endif
+                        Text("Tools require a model listed in OpenAIModels.json. Image prompts may also use the Image generation toggle.").font(.caption)
+                    }.padding(6)
+                }
+                GroupBox("Remote MCP") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("JSON: name, endpoint (HTTPS without secrets), enabled, tools (allowlist). Tokens are stored separately in Keychain. All MCP calls require explicit approval.").font(.caption)
+                        TextEditor(text: $mcpJSON).frame(height: 100)
+                        Button("Save servers / reconnect on next chat") {
+                            let defaults = UserDefaults(suiteName: "Coucou.MCP.validation")!
+                            defer { defaults.removePersistentDomain(forName: "Coucou.MCP.validation") }
+                            defaults.set(mcpJSON, forKey: "mcpServers")
+                            do { _ = try RemoteMCP.servers(defaults); OpenAIService.shared.cancel(); OpenAIService.shared.clearConversation(); UserDefaults.standard.set(mcpJSON, forKey: "mcpServers"); AIChatRouter.shared.reset(); statusMessage = "MCP configuration saved." }
+                            catch { statusMessage = "Invalid MCP configuration; consult docs/MCP.md." }
+                        }
+                        TextField("Server name for token", text: $mcpName)
+                        SecureField("MCP authorization token", text: $mcpToken)
+                        HStack {
+                            Button("Save MCP token") {
+                                guard OpenAIService.safeID(mcpName), mcpName.count <= 32, !mcpToken.isEmpty else { statusMessage = "Invalid server name or empty token."; return }
+                                statusMessage = KeychainStore.shared.set("mcp-token-" + mcpName, value: mcpToken) ? "MCP token saved in Keychain." : "Could not save MCP token."
+                                mcpToken = ""
+                            }
+                            Button("Remove MCP token") { if OpenAIService.safeID(mcpName) { KeychainStore.shared.remove("mcp-token-" + mcpName) }; mcpToken = "" }
+                            Button("Disconnect / cancel") { OpenAIService.shared.cancel(); OpenAIService.shared.clearConversation(); AIChatRouter.shared.reset() }
+                        }
+                        Text("Discovery: ask ‘List tools available from my MCP servers’. Reconnect happens on the next Responses request. Disable a server and save to stop future access.").font(.caption)
+                    }.padding(6)
+                }
+                GroupBox("n8n write workflow") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Fixed production webhook HTTPS URL (no token)", text: $n8nWebhook)
+                        SecureField("Webhook bearer token", text: $webhookToken)
+                        Button("Save webhook token") {
+                            statusMessage = KeychainStore.shared.set("n8n-webhook-token", value: webhookToken) ? "Webhook token saved in Keychain." : "Could not save webhook token."
+                            webhookToken = ""
+                        }
+                        Text("Separate from the n8n polling API key. Configure this webhook with Authorization: Bearer authentication. The model cannot choose an endpoint.").font(.caption)
+                    }.padding(6)
+                }
+
                 // MARK: API
                 GroupBox("Anthropic API") {
                     VStack(alignment: .leading, spacing: 8) {
@@ -61,6 +177,19 @@ struct SettingsView: View {
                         .buttonStyle(.borderedProminent)
                     }
                     .padding(6)
+                }
+
+                GroupBox("Codex Integration (optional)") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Absolute path to official codex executable", text: $codexBinary)
+                        TextField("Absolute project folder", text: $codexWorkspace)
+                        TextField("Task for Codex", text: $codexPrompt)
+                        Text("Sign in with codex login in your terminal first. Starts a dedicated read-only sandbox session. Commands and edits requiring approval appear in the island.").font(.caption)
+                        HStack {
+                            Button("Start Codex") { CodexAdapter.shared.start(binary: codexBinary, cwd: codexWorkspace, prompt: codexPrompt) }
+                            Button("Stop Codex") { CodexAdapter.shared.stop() }
+                        }
+                    }.padding(6)
                 }
 
                 // MARK: Hooks
@@ -354,6 +483,10 @@ struct SettingsView: View {
             .padding(20)
         }
         .frame(width: 480, height: 720)
+        .onChange(of: openaiComputer) { _, _ in OpenAIService.shared.cancel() }
+        .onChange(of: openaiWrites) { _, _ in OpenAIService.shared.cancel() }
+        .onChange(of: openaiModel) { _, _ in OpenAIService.shared.cancel() }
+        .onChange(of: computerTarget) { _, _ in OpenAIService.shared.cancel() }
     }
 
     // MARK: - Actions

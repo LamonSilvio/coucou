@@ -1,5 +1,14 @@
 // Coucou for Windows — app wiring and the commands the island calls.
 
+mod tool_manager;
+mod codex;
+mod actions;
+mod external_actions;
+mod remote_mcp;
+mod image_workflow;
+mod computer_use;
+mod ai;
+mod openai;
 mod claude;
 mod files;
 mod hooks;
@@ -21,7 +30,8 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
-use claude::{Chat, ChatContext, ChatReply};
+use claude::{ChatContext, ChatReply};
+type Chat = tokio::sync::Mutex<ai::Router>;
 use files::DroppedFile;
 use hooks::{HookPreview, HookStatus};
 use island::{PollGate, ScreenInfo};
@@ -60,14 +70,17 @@ fn boot(app: AppHandle, shared: State<Shared>) -> BootInfo {
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
-    let (screen_changed, autostart_changed) = {
+fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) -> Result<(), String> {
+    crate::remote_mcp::validate(&settings.mcp_servers)?;
+    let (screen_changed, autostart_changed, tools_changed) = {
         let mut current = shared.settings.lock().unwrap();
         let screen_changed = current.screen != settings.screen;
         let autostart_changed = current.autostart != settings.autostart;
+        let tools_changed = current.ai_provider != settings.ai_provider || current.openai_model != settings.openai_model || current.openai_computer != settings.openai_computer || current.openai_writes != settings.openai_writes || current.mcp_servers != settings.mcp_servers || current.computer_target != settings.computer_target || current.n8n_webhook != settings.n8n_webhook;
         *current = settings.clone();
-        (screen_changed, autostart_changed)
+        (screen_changed, autostart_changed, tools_changed)
     };
+    if tools_changed { app.state::<actions::Approvals>().cancel(&app); }
     if let Err(err) = settings::save(&settings) {
         eprintln!("[coucou] could not save settings: {err}");
     }
@@ -84,6 +97,7 @@ fn save_settings(app: AppHandle, shared: State<Shared>, settings: Settings) {
     }
     // Keep the other window in step (island ⇄ settings window).
     let _ = app.emit("settings-changed", settings);
+    Ok(())
 }
 
 /// Hidden island → shrink the window to the invisible wake strip and park the
@@ -238,23 +252,53 @@ fn approval_decline(app: AppHandle, request_id: String) {
     pipe::decline(&app, &request_id);
 }
 
+#[tauri::command]
+fn codex_start(app: AppHandle, codex: State<codex::Codex>, binary: String, cwd: String, prompt: String) -> Result<(),String> {
+    codex.start(app,binary,cwd,prompt)
+}
+#[tauri::command]
+fn codex_stop(app: AppHandle, codex: State<codex::Codex>) { codex.close(&app,None); }
+#[tauri::command]
+fn action_decide(app: AppHandle, approvals:State<actions::Approvals>, id:String, allow:bool){approvals.decide(&app,&id,allow);}
+#[tauri::command]
+fn action_cancel(app:AppHandle,approvals:State<actions::Approvals>){approvals.cancel(&app);}
+#[tauri::command]
+async fn image_save(image:String)->Result<String,String>{
+    use computer_use::Executor;
+    tauri::async_runtime::spawn_blocking(move||image_workflow::save_with(&image,||{
+        let path=computer_use::WindowsComputerExecutor{target:"msedge".into()}.execute(&serde_json::json!({"type":"choose_image_path"}))?;
+        Ok(if path.is_empty(){None}else{Some(std::path::PathBuf::from(path))})
+    })).await.map_err(|_|"Image save failed.".to_string())?
+}
+#[tauri::command]
+fn codex_decide(app: AppHandle, codex: State<codex::Codex>, request_id: String, allow: bool) -> Result<(),String> {
+    codex.queue_decision(&app,&request_id,allow)
+}
+
 // ── Chat, files and secrets ───────────────────────────────────────────────────
 
 /// One chat turn. The API key and any file bytes stay on the Rust side.
 #[tauri::command]
 async fn chat_send(
+    app: AppHandle,
     shared: State<'_, Shared>,
     chat: State<'_, Chat>,
     query: String,
     context: Option<ChatContext>,
 ) -> Result<ChatReply, String> {
-    let model = shared.settings.lock().unwrap().model.clone();
-    claude::send(&chat, &model, query, context).await
+    let settings = shared.settings.lock().unwrap().clone();
+    chat.lock().await.send(&app, &settings, query, context).await
 }
 
 #[tauri::command]
-fn chat_reset(chat: State<Chat>) {
-    chat.reset();
+async fn chat_reset(chat: State<'_, Chat>) -> Result<(), String> {
+    chat.lock().await.reset();
+    Ok(())
+}
+
+#[tauri::command]
+async fn openai_download_artifact(chat: State<'_, Chat>, container: String, file: String) -> Result<String,String> {
+    chat.lock().await.download(&container,&file).await
 }
 
 /// Copies a dropped file into the inbox and reports its name back.
@@ -380,6 +424,8 @@ pub fn run() {
         })
         .manage(Pending::default())
         .manage(Chat::default())
+        .manage(codex::Codex::default())
+        .manage(actions::Approvals::default())
         .invoke_handler(tauri::generate_handler![
             boot,
             save_settings,
@@ -397,6 +443,10 @@ pub fn run() {
             approval_ack,
             approval_decline,
             log_line,
+            codex_start, codex_stop, codex_decide,
+            action_decide, action_cancel,
+            image_save,
+            openai_download_artifact,
             chat_send,
             chat_reset,
             ingest_file,

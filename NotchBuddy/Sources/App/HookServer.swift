@@ -129,6 +129,7 @@ final class HookServer: @unchecked Sendable {
             return
         }
 
+        state.lastAgentEvent = ClaudeCodeAdapter.event(name, session: sessionId, tool: payload["tool_name"] as? String ?? "")
         let focused = state.focusId == "integration_claude"
 
         switch name {
@@ -157,7 +158,7 @@ final class HookServer: @unchecked Sendable {
             let input = payload["tool_input"] as? [String: Any] ?? [:]
             let step = frenchStep(tool: tool, input: input)
             appendStep(id: "integration_claude", step: step)
-            nbLog("PreToolUse \(step)")
+            nbLog("PreToolUse")
 
         case "PostToolUse":
             state.updateTask(id: "integration_claude", state: .working)
@@ -268,64 +269,35 @@ final class HookServer: @unchecked Sendable {
         if let input = payload["tool_input"] as? [String: Any] {
             command = input["command"] as? String ?? tool
         }
-        nbLog("PermissionRequest \(tool): \(command)")
+        nbLog("PermissionRequest")
 
-        if pendingApprovalFD >= 0 {
-            let old = pendingApprovalFD
-            Task.detached { [weak self] in
-                // "ask" → nb-hook outputs nothing → Claude Code re-asks
-                self?.sendLine(fd: old, text: #"{"permissionDecision":"ask"}"#)
-                close(old)
-            }
-        }
-        pendingApprovalFD = fd
         activeSessionId = sessionId
 
         upsertTask(projectName: projectName, cwd: cwd)
         state.updateTask(id: "integration_claude", state: .approval)
-        state.pendingApproval = ApprovalInfo(sessionId: sessionId, tool: tool, command: command)
-        state.isPinned = true
+        state.lastAgentEvent = ClaudeCodeAdapter.event("PermissionRequest", session: sessionId, tool: tool)
         SoundEngine.shared.play("approval")
-
-        // Approval always forces the island open — user must be able to respond
         state.focusId = "integration_claude"
-        expandIfNeeded(to: .approval)
-
-        let captured = fd
-        DispatchQueue.main.asyncAfter(deadline: .now() + 115) { [weak self] in
-            guard let self, self.pendingApprovalFD == captured else { return }
-            // "ask" → nb-hook outputs nothing → Claude Code re-asks rather than denying
-            self.sendApprovalDecision("ask")
+        let id = "claude-" + UUID().uuidString
+        let action = ActionRequest(id: id, provider: "anthropic", integration: "claudeCode", operation: tool, parameters: ["action": command], risk: .confirm)
+        let info = ApprovalInfo(sessionId: sessionId, tool: tool, command: command, provider: "claudeCode", requestID: id)
+        ActionApprovalCenter.shared.enqueueLegacy(action, info: info) { [weak self] decision in
+            let value = ["allow", "always", "ask"].contains(decision) ? decision : "deny"
+            Task.detached {
+                self?.sendLine(fd: fd, text: "{\"permissionDecision\":\"\(value)\"}")
+                close(fd)
+            }
+            AppState.shared.updateTask(id: "integration_claude", state: .working)
         }
     }
 
     /// Called by ApprovalView buttons. Writes the decision to the waiting nb-hook and cleans up.
     @MainActor
     func sendApprovalDecision(_ decision: String) {
-        let fd = pendingApprovalFD
-        pendingApprovalFD = -1
-
-        let json: String
-        switch decision {
-        case "allow":  json = #"{"permissionDecision":"allow"}"#
-        case "always": json = #"{"permissionDecision":"always"}"#
-        case "ask":    json = #"{"permissionDecision":"ask"}"#
-        default:       json = #"{"permissionDecision":"deny"}"#
-        }
-
-        if fd >= 0 {
-            Task.detached { [weak self] in
-                self?.sendLine(fd: fd, text: json)
-                close(fd)
-            }
-        }
-
         let state = AppState.shared
-        state.pendingApproval = nil
-        state.isPinned = false
-        state.updateTask(id: "integration_claude", state: .working)
+        guard let info = state.pendingApproval, info.provider == "claudeCode" else { return }
+        ActionApprovalCenter.shared.resolve(info.requestID, decision: decision)
         clearPillBadge(id: "integration_claude")
-        state.view = state.tasks.isEmpty ? .empty : .overview
     }
 
     /// Updates integration_claude with the current session project name and cwd.

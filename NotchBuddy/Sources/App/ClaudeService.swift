@@ -6,15 +6,18 @@ import Security
 enum Keychain {
     static let service = "fr.louisraille.NotchBuddy"
 
-    static func save(key: String, value: String) {
-        guard let data = value.data(using: .utf8) else { return }
-        // Delete existing item first (update pattern)
+    @discardableResult
+    static func save(key: String, value: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
+        // Update atomically; an OS storage failure must not delete the existing key.
         let lookup: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
-        SecItemDelete(lookup as CFDictionary)
+        let status = SecItemUpdate(lookup as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecSuccess { return true }
+        guard status == errSecItemNotFound else { return false }
         // Add with strictest access control:
         // WhenUnlockedThisDeviceOnly = accessible only while Mac is unlocked,
         // never synced to iCloud, never migrated to another device.
@@ -26,7 +29,7 @@ enum Keychain {
             kSecAttrAccessible as String:   kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             kSecAttrSynchronizable as String: kCFBooleanFalse!,
         ]
-        SecItemAdd(item as CFDictionary, nil)
+        return SecItemAdd(item as CFDictionary, nil) == errSecSuccess
     }
 
     static func load(key: String) -> String? {
@@ -61,7 +64,7 @@ final class KeychainStore: @unchecked Sendable {
     private let lock = NSLock()
 
     private static let allKeys = [
-        "anthropic-api-key",
+        "anthropic-api-key", "openai-api-key",
         "resend-api-key", "resend-from",
         "n8n-url", "n8n-api-key",
         "vercel-token",
@@ -80,13 +83,16 @@ final class KeychainStore: @unchecked Sendable {
 
     /// Thread-safe read — never touches the Keychain.
     func get(_ key: String) -> String? {
-        lock.withLock { cache[key] }
+        if key.hasPrefix("mcp-token-") || key == "n8n-webhook-token" { return Keychain.load(key: key) }
+        return lock.withLock { cache[key] }
     }
 
     /// Updates cache + persists to Keychain.
-    func set(_ key: String, value: String) {
+    @discardableResult
+    func set(_ key: String, value: String) -> Bool {
+        guard Keychain.save(key: key, value: value) else { return false }
         lock.withLock { cache[key] = value }
-        Keychain.save(key: key, value: value)
+        return true
     }
 
     /// Removes from cache + Keychain only if the key was previously set.
@@ -242,7 +248,7 @@ final class ClaudeService {
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            let msg = String(data: data, encoding: .utf8) ?? "unknown error"
+            let msg = "Anthropic request failed. Check API credentials, quota and model availability."
             throw NSError(domain: "Claude", code: 0, userInfo: [NSLocalizedDescriptionKey: msg])
         }
         return data

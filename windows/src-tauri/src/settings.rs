@@ -20,7 +20,35 @@ pub struct Settings {
     /// Defaulted explicitly so a settings.json written by an older build still loads.
     #[serde(default = "default_model")]
     pub model: String,
+    #[serde(default)]
+    pub ai_provider: crate::ai::Provider,
+    #[serde(default)]
+    pub openai_model: String,
+    #[serde(default)]
+    pub openai_reasoning: String,
+    #[serde(default = "default_tokens")]
+    pub openai_max_tokens: u32,
+    #[serde(default)]
+    pub openai_web_search: bool,
+    #[serde(default)]
+    pub openai_code_interpreter: bool,
+    #[serde(default)]
+    pub openai_integrations: bool,
+    #[serde(default)] pub openai_writes: bool,
+    #[serde(default)] pub openai_images: bool,
+    #[serde(default)] pub openai_computer: bool,
+    #[serde(default)] pub openai_image_model: String,
+    #[serde(default = "image_size")] pub openai_image_size: String,
+    #[serde(default)] pub openai_image_transparent: bool,
+    #[serde(default = "computer_target")] pub computer_target: String,
+    #[serde(default)] pub mcp_servers: Vec<crate::remote_mcp::Server>,
+    #[serde(default)] pub n8n_webhook: String,
+
 }
+
+fn default_tokens() -> u32 { 4096 }
+fn image_size()->String{"auto".into()}
+fn computer_target()->String{"msedge".into()}
 
 fn default_model() -> String {
     crate::claude::DEFAULT_MODEL.to_string()
@@ -43,6 +71,10 @@ impl Default for Settings {
             autostart: false,
             hooks_installed: false,
             model: default_model(),
+            ai_provider: crate::ai::Provider::Anthropic,
+            openai_model: String::new(), openai_reasoning: String::new(),
+            openai_max_tokens: 4096, openai_web_search: false, openai_code_interpreter: false, openai_integrations: false,
+            openai_writes:false,openai_images:false,openai_computer:false,openai_image_model:String::new(),openai_image_size:image_size(),openai_image_transparent:false,computer_target:computer_target(),mcp_servers:vec![],n8n_webhook:String::new(),
         }
     }
 }

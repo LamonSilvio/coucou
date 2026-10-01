@@ -7,6 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4B61C7904521A68946C4979A /* ActionApproval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AEAFDC24406D0C219293700 /* ActionApproval.swift */; };
+		BA78F45B7145EF1166C4282B /* ActionApproval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AEAFDC24406D0C219293700 /* ActionApproval.swift */; };
+		5DF8F5A2828146E8D9692D3E /* ComputerUse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9235F6AF8E9FA15758364B /* ComputerUse.swift */; };
+		DF3D064CD06E8F11A7DB48FF /* ComputerUse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9235F6AF8E9FA15758364B /* ComputerUse.swift */; };
+		96D108B8F3DBB30D0CA454BA /* ExternalActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E71F6CEF4D5931E1967269A /* ExternalActions.swift */; };
+		A4EA88F6A19DE382B2F7853C /* ExternalActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E71F6CEF4D5931E1967269A /* ExternalActions.swift */; };
+		7F80281CAD2CB6241BE85A93 /* ImageWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEEFAE456AC34706E48655B2 /* ImageWorkflow.swift */; };
+		B7D009382ED765D16F520626 /* ImageWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEEFAE456AC34706E48655B2 /* ImageWorkflow.swift */; };
+		24ABDE50ED9017E762560789 /* RemoteMCP.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C6FF887FA3A6D5D49C6FC0 /* RemoteMCP.swift */; };
+		7D8F89245798DD7B1ECAADB9 /* RemoteMCP.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C6FF887FA3A6D5D49C6FC0 /* RemoteMCP.swift */; };
+		D8EC5812A5BD95C545AFC54F /* ExternalActions.json in Resources */ = {isa = PBXBuildFile; fileRef = 9C992FF7E7EE1C64A12CB809 /* ExternalActions.json */; };
+		9650F6A2AC8C02F47F2F2E6B /* ExternalActions.json in Resources */ = {isa = PBXBuildFile; fileRef = 9C992FF7E7EE1C64A12CB809 /* ExternalActions.json */; };
+
 		0329E76BA4A8FEEA8A6D76E7 /* ClaudeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A83D5410BD030B243ADDCFF4 /* ClaudeService.swift */; };
 		065FCE817315454DE3F85F25 /* IslandViewContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA02B08886939FF6FE0475DD /* IslandViewContent.swift */; };
 		06BF5FD95E03010CAFDBF2D0 /* NotchBuddyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BD8F3CAA60CF37640759E1 /* NotchBuddyApp.swift */; };
@@ -63,9 +76,28 @@
 		F06EE0A97CB77096A337AA8B /* sounds in Resources */ = {isa = PBXBuildFile; fileRef = C066E2B991AA4F56B2724263 /* sounds */; };
 		FAD78D74C6906D4EC8AA4101 /* UploadSequenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FD65943C32E150F1CD65C31 /* UploadSequenceEngine.swift */; };
 		FBBC4CDE82B5886A83A27D7A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 506824380E9C80B9BC6DCE72 /* Assets.xcassets */; };
+		85F8B0A96B7570B917DE0262 /* AIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959D8ACBF137A2EBF5789D90 /* AIProvider.swift */; };
+		E1C2F114AA5498D9811841A2 /* AIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959D8ACBF137A2EBF5789D90 /* AIProvider.swift */; };
+		776017D5C769F89AC52B940A /* AgentEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C7D37F0D21DEA3FF5CFE52 /* AgentEvent.swift */; };
+		526DBDA1CB0F8D8D4A904E1A /* AgentEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C7D37F0D21DEA3FF5CFE52 /* AgentEvent.swift */; };
+		42FDE6ECF15C0A0A0124E7D6 /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78AACE3A050CACA3799C9661 /* OpenAIService.swift */; };
+		613B70AB4EA69AA045094D70 /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78AACE3A050CACA3799C9661 /* OpenAIService.swift */; };
+		236D9D725DF00E7B84CBB992 /* CodexAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3FAE288D7EA0A2121D7900 /* CodexAdapter.swift */; };
+		397E815AA34D6061CCD464F9 /* CodexAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3FAE288D7EA0A2121D7900 /* CodexAdapter.swift */; };
+		7D4DDE8171F1F89623A9E868 /* ToolManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6831580430A71F019BCB720 /* ToolManager.swift */; };
+		B7C5FC03B2114E5AFF2B7DA2 /* ToolManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6831580430A71F019BCB720 /* ToolManager.swift */; };
+		8AD1F047E8D20B58B368D8A8 /* OpenAIModels.json in Resources */ = {isa = PBXBuildFile; fileRef = 7E06654AC493D8B7A9A54137 /* OpenAIModels.json */; };
+		3FDC0A97CF3A41A86DB96DD3 /* OpenAIModels.json in Resources */ = {isa = PBXBuildFile; fileRef = 7E06654AC493D8B7A9A54137 /* OpenAIModels.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1AEAFDC24406D0C219293700 /* ActionApproval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionApproval.swift; sourceTree = "<group>"; };
+		2A9235F6AF8E9FA15758364B /* ComputerUse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerUse.swift; sourceTree = "<group>"; };
+		6E71F6CEF4D5931E1967269A /* ExternalActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalActions.swift; sourceTree = "<group>"; };
+		EEEFAE456AC34706E48655B2 /* ImageWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageWorkflow.swift; sourceTree = "<group>"; };
+		B4C6FF887FA3A6D5D49C6FC0 /* RemoteMCP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMCP.swift; sourceTree = "<group>"; };
+		9C992FF7E7EE1C64A12CB809 /* ExternalActions.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = ExternalActions.json; sourceTree = "<group>"; };
+
 		15A1A8206F73376F4CAF2057 /* IslandRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandRootView.swift; sourceTree = "<group>"; };
 		192844E7299DEED5C2372067 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		1BE21C2B315D37AA70ED45E9 /* SoundEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundEngine.swift; sourceTree = "<group>"; };
@@ -96,6 +128,12 @@
 		E91B733ADC638E14E9BB6EFA /* WindowContextCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowContextCapture.swift; sourceTree = "<group>"; };
 		F1BD8F3CAA60CF37640759E1 /* NotchBuddyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchBuddyApp.swift; sourceTree = "<group>"; };
 		FA02B08886939FF6FE0475DD /* IslandViewContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandViewContent.swift; sourceTree = "<group>"; };
+		959D8ACBF137A2EBF5789D90 /* AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProvider.swift; sourceTree = "<group>"; };
+		25C7D37F0D21DEA3FF5CFE52 /* AgentEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentEvent.swift; sourceTree = "<group>"; };
+		78AACE3A050CACA3799C9661 /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
+		FB3FAE288D7EA0A2121D7900 /* CodexAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexAdapter.swift; sourceTree = "<group>"; };
+		D6831580430A71F019BCB720 /* ToolManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolManager.swift; sourceTree = "<group>"; };
+		7E06654AC493D8B7A9A54137 /* OpenAIModels.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = OpenAIModels.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -107,6 +145,16 @@
 				A29F4C0B02BE91654D02AA0C /* BotCanvasView.swift */,
 				D4540F630F8BA04AFFFA3979 /* BotEngine.swift */,
 				3104222B3F17BA5E8DEA5277 /* CalcomPoller.swift */,
+				959D8ACBF137A2EBF5789D90 /* AIProvider.swift */,
+				25C7D37F0D21DEA3FF5CFE52 /* AgentEvent.swift */,
+				78AACE3A050CACA3799C9661 /* OpenAIService.swift */,
+				1AEAFDC24406D0C219293700 /* ActionApproval.swift */,
+				2A9235F6AF8E9FA15758364B /* ComputerUse.swift */,
+				6E71F6CEF4D5931E1967269A /* ExternalActions.swift */,
+				EEEFAE456AC34706E48655B2 /* ImageWorkflow.swift */,
+				B4C6FF887FA3A6D5D49C6FC0 /* RemoteMCP.swift */,
+				FB3FAE288D7EA0A2121D7900 /* CodexAdapter.swift */,
+				D6831580430A71F019BCB720 /* ToolManager.swift */,
 				A83D5410BD030B243ADDCFF4 /* ClaudeService.swift */,
 				3232F258523DD8D09B670363 /* FileDropView.swift */,
 				8CB8B6E5E9DA6164F979E88F /* GithubPoller.swift */,
@@ -162,6 +210,8 @@
 		D3593DF62D69E62DA5121807 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				7E06654AC493D8B7A9A54137 /* OpenAIModels.json */,
+				9C992FF7E7EE1C64A12CB809 /* ExternalActions.json */,
 				C066E2B991AA4F56B2724263 /* sounds */,
 			);
 			path = Resources;
@@ -249,6 +299,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3FDC0A97CF3A41A86DB96DD3 /* OpenAIModels.json in Resources */,
+				D8EC5812A5BD95C545AFC54F /* ExternalActions.json in Resources */,
 				FBBC4CDE82B5886A83A27D7A /* Assets.xcassets in Resources */,
 				B3EC9CF3C8BD629C3530E8F1 /* sounds in Resources */,
 			);
@@ -258,6 +310,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8AD1F047E8D20B58B368D8A8 /* OpenAIModels.json in Resources */,
+				9650F6A2AC8C02F47F2F2E6B /* ExternalActions.json in Resources */,
 				DCAC390FF9EC65B945A15B24 /* Assets.xcassets in Resources */,
 				F06EE0A97CB77096A337AA8B /* sounds in Resources */,
 			);
@@ -275,6 +329,16 @@
 				CD8DECA66B9E09C97E469DB9 /* BotCanvasView.swift in Sources */,
 				C24D863967D8D32D828ED4B1 /* BotEngine.swift in Sources */,
 				4F1E0B3C838DA3CD6F864BC0 /* CalcomPoller.swift in Sources */,
+				E1C2F114AA5498D9811841A2 /* AIProvider.swift in Sources */,
+				526DBDA1CB0F8D8D4A904E1A /* AgentEvent.swift in Sources */,
+				613B70AB4EA69AA045094D70 /* OpenAIService.swift in Sources */,
+				4B61C7904521A68946C4979A /* ActionApproval.swift in Sources */,
+				5DF8F5A2828146E8D9692D3E /* ComputerUse.swift in Sources */,
+				96D108B8F3DBB30D0CA454BA /* ExternalActions.swift in Sources */,
+				7F80281CAD2CB6241BE85A93 /* ImageWorkflow.swift in Sources */,
+				24ABDE50ED9017E762560789 /* RemoteMCP.swift in Sources */,
+				397E815AA34D6061CCD464F9 /* CodexAdapter.swift in Sources */,
+				B7C5FC03B2114E5AFF2B7DA2 /* ToolManager.swift in Sources */,
 				2DEB459FBD0BA3CEAAA5FDE9 /* ClaudeService.swift in Sources */,
 				E776C7D1DE5C62EA8D4BA3E3 /* FileDropView.swift in Sources */,
 				C808B654C84D9F71DBF8493A /* GithubPoller.swift in Sources */,
@@ -308,6 +372,16 @@
 				651FA3F09608DE5D02D61CCE /* BotCanvasView.swift in Sources */,
 				0E9CE475EC53C67DAB00F8E5 /* BotEngine.swift in Sources */,
 				1969590AFEE6CB21404346F1 /* CalcomPoller.swift in Sources */,
+				85F8B0A96B7570B917DE0262 /* AIProvider.swift in Sources */,
+				776017D5C769F89AC52B940A /* AgentEvent.swift in Sources */,
+				42FDE6ECF15C0A0A0124E7D6 /* OpenAIService.swift in Sources */,
+				BA78F45B7145EF1166C4282B /* ActionApproval.swift in Sources */,
+				DF3D064CD06E8F11A7DB48FF /* ComputerUse.swift in Sources */,
+				A4EA88F6A19DE382B2F7853C /* ExternalActions.swift in Sources */,
+				B7D009382ED765D16F520626 /* ImageWorkflow.swift in Sources */,
+				7D8F89245798DD7B1ECAADB9 /* RemoteMCP.swift in Sources */,
+				236D9D725DF00E7B84CBB992 /* CodexAdapter.swift in Sources */,
+				7D4DDE8171F1F89623A9E868 /* ToolManager.swift in Sources */,
 				0329E76BA4A8FEEA8A6D76E7 /* ClaudeService.swift in Sources */,
 				2132477000FD77F7EB234DAA /* FileDropView.swift in Sources */,
 				C18227D148D99FE6EE3CC51A /* GithubPoller.swift in Sources */,

@@ -40,6 +40,28 @@ final class ActionTests: XCTestCase {
         let task=Task { await c.authorize(action()) }; await Task.yield();c.cancelAll()
         let allowed=await task.value;XCTAssertFalse(allowed)
     }
+    func cancelImmediatelyAfterAllow() -> ActionApprovalCenter {
+        var c: ActionApprovalCenter!
+        c=ActionApprovalCenter(present:{a in c.resolve(a.id,allow:true);c.cancelAll()},available:{true},clear:{_ in},audit:{_,_ in})
+        return c
+    }
+    func testCancelRevokesAllowedWriteBeforeExecutor() async {
+        var executions=0
+        let result=await cancelImmediatelyAfterAllow().execute(action()) {executions += 1;return "unexpected"}
+        XCTAssertEqual(executions,0);XCTAssertTrue(result.contains("error"))
+    }
+    func testCancelRevokesComputerActionAndCaptureBeforeExecutor() async {
+        for type in ["click","screenshot"] {
+            let fake=FakeComputer(image:png())
+            do {_ = try await ComputerUse.handle(["type":"computer_call","call_id":"cancel_"+type,"actions":[["type":type,"x":1,"y":2]]],executor:fake,approvals:cancelImmediatelyAfterAllow());XCTFail("Cancelled execution") } catch {}
+            XCTAssertEqual(fake.executions,0);XCTAssertEqual(fake.captures,0)
+        }
+    }
+    func testCancelRevokesMCPGrantBeforeForwarding() async {
+        let server=RemoteMCPServer(name:"example",endpoint:"https://example.com/mcp",enabled:true,tools:["search"])
+        let response=await RemoteMCP.approval(["id":"cancel_mcp","server_label":"example","name":"search","arguments":"{}"],servers:[server],approvals:cancelImmediatelyAfterAllow())
+        XCTAssertEqual(response["approve"] as? Bool,false)
+    }
     func testRiskCannotBeDowngraded() async {
         let c=center(true),a=ActionRequest(id:"forged",provider:"openai",integration:"stripe",operation:"refund",parameters:[:],risk:.safe)
         let allowed=await c.authorize(a);XCTAssertFalse(allowed)

@@ -46,6 +46,7 @@ enum RemoteMCP {
         if !id.isEmpty, servers.contains(where: { $0.enabled && $0.name == server && $0.tools.contains(tool) }), SecretRedaction.text(raw) == raw,
            let data = raw.data(using: .utf8), let args = try? JSONSerialization.jsonObject(with: data) as? [String: Any], !SecretRedaction.sensitive(args) {
             allowed = await approvals.authorize(ActionRequest(id: id, provider: "openai", integration: "mcp", operation: tool, parameters: ["server": server, "tool": tool, "arguments": args], risk: .critical))
+            allowed = allowed && approvals.claimExecution(id)
         }
         return ["type": "mcp_approval_response", "approval_request_id": id, "approve": allowed]
     }

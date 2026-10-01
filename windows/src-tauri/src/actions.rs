@@ -63,7 +63,12 @@ impl Approvals {
         let _=tx.send(allow);events(ApprovalEvent::Resolved(id.into()));
         if let Some(next)=next{events(ApprovalEvent::Requested(next));}
     }
-    pub fn cancel(&self,app:&AppHandle){self.generation.fetch_add(1,std::sync::atomic::Ordering::SeqCst);self.cancelled.notify_waiters();let ids:Vec<_>=self.state.lock().unwrap().pending.keys().cloned().collect();for id in ids{self.decide(app,&id,false)}}
+    pub fn cancel(&self,app:&AppHandle){self.cancel_with(|e|emit(app,e))}
+    pub fn cancel_with(&self,events:impl Fn(ApprovalEvent)){
+        self.generation.fetch_add(1,std::sync::atomic::Ordering::SeqCst);self.cancelled.notify_waiters();
+        let ids:Vec<_>={let mut s=self.state.lock().unwrap();let executed=s.executed.clone();s.approved.retain(|id|executed.contains(id));s.pending.keys().cloned().collect()};
+        for id in ids{self.decide_with(&id,false,&events)}
+    }
     pub fn generation(&self)->u64{self.generation.load(std::sync::atomic::Ordering::SeqCst)}
     pub fn claim_execution(&self,id:&str)->bool{let mut s=self.state.lock().unwrap();s.approved.contains(id)&&s.executed.insert(id.into())}
 }
@@ -84,5 +89,6 @@ mod tests {
     #[tokio::test] async fn confirm_allow_double_click(){let c=Approvals::default();let a=action("confirm","github","create_issue");assert!(c.authorize_with(a,std::time::Duration::from_millis(50),|e|if let ApprovalEvent::Requested(a)=e{c.decide_with(&a.id,true,|_|{});c.decide_with(&a.id,true,|_|{});}).await);assert!(c.claim_execution("confirm"));assert!(!c.claim_execution("confirm"));}
     #[tokio::test] async fn critical_deny(){let c=Approvals::default();assert!(!c.authorize_with(action("critical","resend","send_email"),std::time::Duration::from_millis(50),|e|if let ApprovalEvent::Requested(a)=e{c.decide_with(&a.id,false,|_|{});}).await);assert!(!c.claim_execution("critical"));}
     #[tokio::test] async fn timeout_denies(){let c=Approvals::default();assert!(!c.authorize_with(action("expiry","github","create_issue"),std::time::Duration::from_millis(5),|_|{}).await);c.decide_with("expiry",true,|_|{});assert!(!c.claim_execution("expiry"));}
+    #[tokio::test] async fn cancel_revokes_allowed_not_started(){let c=Approvals::default();assert!(c.authorize_with(action("race","github","create_issue"),std::time::Duration::from_millis(50),|e|if let ApprovalEvent::Requested(a)=e{c.decide_with(&a.id,true,|_|{});c.cancel_with(|_|{});}).await);assert!(!c.claim_execution("race"));}
     #[test] fn secrets_redacted_keys_not_keyboard(){let v=redact(&json!({"api_key":"secret","nested":{"password":"private"},"keys":["ENTER"],"text":"Bearer sensitive"}));assert_eq!(v["api_key"],"[REDACTED]");assert_eq!(v["nested"]["password"],"[REDACTED]");assert_eq!(v["keys"],json!(["ENTER"]));assert_eq!(v["text"],"[REDACTED]");}
 }

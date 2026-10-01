@@ -171,6 +171,7 @@ impl Codex {
         tauri::async_runtime::spawn(async move {
             let action=crate::actions::Action{id:format!("codex-{generation}-{request_id}"),provider:"codex".into(),integration:"codex".into(),operation:"agent_action".into(),parameters:json!({"action":detail}),risk:crate::actions::Risk::Critical};
             let allow=app.state::<crate::actions::Approvals>().authorize(&app,action.clone()).await;
+            let allow=allow&&app.state::<crate::actions::Approvals>().claim_execution(&action.id);
             let codex = app.state::<Codex>();
             let current=codex.session.lock().unwrap().as_ref().is_some_and(|s|s.generation==generation&&s.approvals.contains_key(&request_id));
             if current { let result=codex.decide(&app,generation,&request_id,allow);crate::actions::audit(&action,if result.is_ok(){"success"}else{"failure"}); }

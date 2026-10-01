@@ -112,7 +112,11 @@ final class ActionApprovalCenter {
         clear(id); audit(pending.action, allow ? "approved" : "denied")
         pending.finish(allow ? decision : decision == "ask" ? "ask" : "deny"); pump()
     }
-    func cancelAll() { generation += 1; for id in queue.map({ $0.action.id }) { resolve(id, allow: false) } }
+    func cancelAll() {
+        generation += 1
+        approved.formIntersection(executed) // Revoke Allow decisions whose executor has not started.
+        for id in queue.map({ $0.action.id }) { resolve(id, allow: false) }
+    }
     func claimExecution(_ id: String) -> Bool { approved.contains(id) && executed.insert(id).inserted }
     func record(_ action: ActionRequest, outcome: String) { audit(action, outcome) }
     func execute(_ action: ActionRequest, executor: () async throws -> String) async -> String {

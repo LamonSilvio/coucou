@@ -31,6 +31,7 @@ pub async fn approval(app:&AppHandle,item:&Value,servers:&[Server])->Value{
     let mut allow=false;
     if !id.is_empty()&&args.is_object()&&redact(&args)==args&&servers.iter().any(|s|s.enabled&&s.name==server&&s.tools.iter().any(|t|t==name)){
         allow=app.state::<Approvals>().authorize(app,Action{id:id.into(),provider:"openai".into(),integration:"mcp".into(),operation:name.into(),parameters:json!({"server":server,"tool":name,"arguments":args}),risk:Risk::Critical}).await;
+        allow=allow&&app.state::<Approvals>().claim_execution(id);
     }
     json!({"type":"mcp_approval_response","approval_request_id":id,"approve":allow})
 }

@@ -21,7 +21,7 @@ impl Executor for WindowsComputerExecutor {
         let binary=std::path::PathBuf::from(std::env::var_os("SystemRoot").ok_or("Windows system directory unavailable.")?).join("System32/WindowsPowerShell/v1.0/powershell.exe");
         let mut process=Command::new(binary).args(["-NoProfile","-NonInteractive","-Command",include_str!("computer-executor.ps1")]).creation_flags(0x08000000).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_|"Computer executor unavailable.")?;
         let mut stdin=process.stdin.take().ok_or("Input unavailable.")?;
-        stdin.write_all(json!({"target":self.target,"action":action}).to_string().as_bytes()).map_err(|_|"Computer input failed.")?;drop(stdin);
+        writeln!(stdin,"{}",json!({"target":self.target,"action":action})).map_err(|_|"Computer input failed.")?;drop(stdin);
         let stdout=process.stdout.take().ok_or("Output unavailable.")?;
         let reader=std::thread::spawn(move||{let mut v=vec![];stdout.take(28_000_001).read_to_end(&mut v).map(|_|v)});
         let start=std::time::Instant::now();
@@ -31,7 +31,7 @@ impl Executor for WindowsComputerExecutor {
                 if !status.success()||bytes.len()>28_000_000{return Err("Computer action blocked or failed. Verify target, permissions and focused field.".into())}
                 return String::from_utf8(bytes).map_err(|_|"Invalid screenshot encoding.".into())
             }
-            let limit=if action["type"]=="choose_image_path"{600}else{15};
+            let limit=if action["type"]=="choose_image_path"{600}else{45};
             if start.elapsed()>std::time::Duration::from_secs(limit){let _=process.kill();let _=process.wait();return Err("Computer executor timed out.".into())}
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
@@ -80,5 +80,5 @@ where A:Fn(Action)->AF,AF:std::future::Future<Output=bool>,E:Fn(Action,Value)->E
  #[test]fn mock_executor(){struct Fake;impl Executor for Fake{fn execute(&self,a:&Value)->Result<String,String>{Ok(a["type"].as_str().unwrap().into())}}assert_eq!(Fake.execute(&json!({"type":"click"})).unwrap(),"click");}
  #[tokio::test]async fn mocked_logical_execution_and_approval(){let requests=std::sync::Mutex::new(vec![]);let executions=std::sync::Mutex::new(vec![]);let call=json!({"type":"computer_call","call_id":"mock_steps","actions":[{"type":"click","x":1,"y":2}],"pending_safety_checks":[{"id":"check","message":"Review"}]});let output=run_with(&call,|a|{requests.lock().unwrap().push(a.operation);std::future::ready(true)},|_,a|{executions.lock().unwrap().push(a["type"].as_str().unwrap().to_owned());std::future::ready(Ok("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6R6IAAAAASUVORK5CYII=".into()))},||false).await.unwrap();assert_eq!(*requests.lock().unwrap(),vec!["safety_checks","click","screenshot"]);assert_eq!(*executions.lock().unwrap(),vec!["click","screenshot"]);assert_eq!(output["type"],"computer_call_output");assert!(output.get("acknowledged_safety_checks").is_some());}
  #[tokio::test]async fn denial_never_invokes_executor(){let call=json!({"type":"computer_call","call_id":"denied_steps","actions":[{"type":"click","x":1,"y":2}]});assert!(run_with(&call,|_|std::future::ready(false),|_,_|{panic!("Denied executor invoked");#[allow(unreachable_code)]std::future::ready(Ok(String::new()))},||false).await.is_err());}
- #[test]fn native_driver_safe_bootstrap(){assert!(WindowsComputerExecutor{target:"msedge".into()}.execute(&json!({"type":"wait"})).is_ok());}
+ #[test]fn native_driver_safe_bootstrap(){let result=WindowsComputerExecutor{target:"msedge".into()}.execute(&json!({"type":"wait"}));assert!(result.is_ok(),"Native driver bootstrap: {result:?}");}
 }

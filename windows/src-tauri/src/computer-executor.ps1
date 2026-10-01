@@ -24,7 +24,7 @@ public class CoucouInput {
  public static void MouseEvent(uint flags,int data=0) { var i=new Input{type=0,union=new Union{mouse=new Mouse{flags=flags,data=(uint)data}}}; if(SendInput(1,new[]{i},Marshal.SizeOf(typeof(Input)))!=1) throw new Exception("Input denied"); }
 }
 '@
-$request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$request = [Console]::In.ReadLine() | ConvertFrom-Json
 $action = $request.action
 $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
 if ($action.type -eq 'choose_image_path') {

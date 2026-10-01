@@ -14,9 +14,9 @@ ChatGPT subscriptions and OpenAI API billing are separate. API calls, hosted too
 
 Select a model by its API identifier. Capability configuration is shared by both platforms in `NotchBuddy/Resources/OpenAIModels.json`, bundled on macOS and compiled into Windows. The default is `gpt-4.1`; `gpt-5` adds configurable reasoning. An unknown model can be used for text, but optional tools, PDF/vision and reasoning are rejected unless its capabilities are registered. This is a conservative maintained catalog, not automatic server-side capability detection. An API model listing alone does not establish tool capabilities.
 
-Settings expose model, reasoning effort, maximum output tokens, Web Search, Code Interpreter and read-only integration status. An incompatible configured tool fails with an actionable message instead of silently removing it. These settings are independent of the Anthropic model.
+Settings expose model, reasoning effort, maximum output tokens, Web Search, Code Interpreter, read-only integration status, external writes, image generation/editing, and Computer Use. Computer Use and new optional tools are OFF by default. The catalog includes `gpt-6.1-sol` with the structured computer tool. Image model, size and transparency are configured separately. Incompatible tools fail clearly instead of being silently removed. These settings are independent of the Anthropic model.
 
-The client uses **Responses API**, `store:false`, and replays all completed output items for multi-turn context. Reasoning responses request encrypted reasoning content when an effort is selected. Failed or incomplete requests leave successful history intact. Files/window context are attached on the first turn or when changed. Requests use a fixed OpenAI HTTPS origin, disable redirects and use a 120-second timeout.
+The client uses **Responses API**, `store:false`, and replays completed history for multi-turn context. Generated images become inline image inputs so editing does not depend on stored responses. Consumed MCP approval grants are removed; prior MCP results become bounded untrusted text, not reusable authorization objects. Reasoning requests encrypted content when an effort is selected. Failed/incomplete requests leave successful history intact. Context is attached initially or when changed. Requests use a fixed OpenAI HTTPS origin, disable redirects and use a 120-second resource timeout.
 
 ## Files, vision and window context
 
@@ -34,21 +34,25 @@ Code Interpreter uses an automatic OpenAI-hosted container. The chat shows tool 
 
 ## Function calling, integrations and MCP
 
-The optional `list_integrations` function is a strict, empty-argument, read-only tool. It returns enabled integration names and whether credentials are configured. It shares the existing GitHub, Notion, n8n, Stripe, Vercel, Resend and Cal.com settings; it never returns credentials or performs external actions. Unknown names and extra arguments are rejected. Tool loops are limited to eight Responses requests and only commit history after a usable final answer.
+The optional `list_integrations` function is a strict, empty-argument, read-only tool. It returns enabled integration names and whether credentials are configured. It shares the existing GitHub, Notion, n8n, Stripe, Vercel, Resend and Cal.com settings; it never returns credentials or performs external actions. Unknown names and extra arguments are rejected. Tool loops are bounded to eight Responses requests, or 32 with Computer Use enabled, and only commit history after a usable final text/image answer.
 
-The existing integration pollers keep their original behavior. This implementation does not add payment, deployment, email, repository modification or arbitrary shell tools to OpenAI chat. A three-level permission contract (`safe`, `confirm`, `critical`) reserves explicit user confirmation for effects. Remote Responses MCP servers and their approval requests are not configured; no model-supplied MCP URL can be contacted. Codex-owned MCP item activity may be displayed, but unsupported client approval requests fail closed.
+Existing integration pollers keep their behavior and credentials. The strict optional `external_action` function proposes allowlisted writes documented in [TOOLS.md](TOOLS.md). Native validation, risk evaluation and the shared queue run before reading a write credential or contacting an integration. No arbitrary URL/shell function is registered. MCP uses the official Responses-hosted remote MCP tool, always requires approval, and accepts only locally configured endpoints/tools; see [MCP.md](MCP.md). Tool loops use at most eight Responses requests, or 32 when Computer Use is enabled.
 
 ## Codex and Allow / Deny
 
 Install the official Codex CLI and authenticate using `codex login` in your terminal. In Settings, enable the optional integration, enter the absolute executable path and existing project folder, write a task and choose Start Codex. On Windows use the native executable, not a shell command or `.cmd` launcher. Coucou starts its own `codex app-server` over stdio, initializes the connection, starts a thread with `sandbox:readOnly` and `approvalPolicy:untrusted`, then starts a turn. Stop ends only that owned process. No credentials are intercepted.
 
-Command/file approval JSON-RPC requests from the current thread and turn appear in the existing Mochi approval UI. **Allow** sends official `accept`; **Deny** sends `decline`. Decisions are one request at a time, expire after 110 seconds and do not enable session-wide or permanent consent. File changes require an available reviewable diff; proposals over 20,000 characters are denied. Network-specific approvals show the requested host. Unknown server requests return an unsupported-method error. Existing Claude Allow, Deny and Always behavior is unchanged.
+Command/file approval JSON-RPC requests from the current thread and turn enter the shared Mochi approval queue. **Allow** forwards official `accept`; **Deny** forwards `decline`. Decisions expire after 110 seconds and do not enable session-wide or permanent consent. Available file diffs are reviewed; absent diffs or proposals over 20,000 characters are denied. Network-specific approvals show the host. Unknown server requests fail closed. Existing Claude Allow/Deny and macOS Always wire semantics are preserved; queued Claude expiry returns control to its terminal instead of inventing permission events.
 
 Codex monitoring includes session, turn, command, file-change and generic tool activity, completion and errors when supplied by app-server. It does not observe unrelated CLI sessions, invent universal file-read events or offer Jump to Terminal without a reliable terminal identity. Claude retains its existing terminal navigation. The macOS App Store target cannot launch Codex because of its sandbox; the normal source build can.
 
 ## Computer use and other limits
 
-Computer use is unavailable and disabled. There is no local screen/keyboard executor or way to enable one through prompts. OpenAI image generation, persistent file search, external write tools, remote MCP authorization and attachment to pre-existing Codex terminal sessions remain unimplemented. Vision is implemented separately from image generation.
+Computer Use has logical/native executors on macOS and Windows, is OFF by default, and controls only the configured supported browser. Every desktop input event and screenshot transmission requires explicit CRITICAL approval; only waiting is SAFE. The App Store target cannot use desktop Computer Use. See [COMPUTER_USE.md](COMPUTER_USE.md).
+
+Enable **Image generation / editing** to use the official Responses `image_generation` tool. Image models are configured once in the shared catalog (default `gpt-image-2.5-sunburst`). Sizes: auto, 1024x1024, 1536x1024, 1024x1536; transparent background and PNG output are configurable. Text creation and dropped-image edits use generate/edit intent when recognized, otherwise the official auto mode. Image questions remain vision requests. Completed base64 PNG results are bounded/validated, previewed in the existing chat, and saved only through the user's native save dialog. Follow-up edits reuse inline image context. Cancel stops the request chain; it cannot reverse a provider call already underway. There is no automatic arbitrary-directory save.
+
+Persistent file search/vector stores, arbitrary-desktop/code executors and attachment to unrelated Codex terminal sessions remain outside this implementation. See the precise adapter/platform limits in the linked guides.
 
 Live OpenAI/Anthropic/Codex validation requires credentials and authenticated runtimes on a supported OS. Automated request/adapter tests do not establish that paid API features work for your account.
 
@@ -61,7 +65,7 @@ Live OpenAI/Anthropic/Codex validation requires credentials and authenticated ru
 - [Web Search](https://developers.openai.com/api/docs/guides/tools-web-search)
 - [Code Interpreter](https://developers.openai.com/api/docs/guides/tools-code-interpreter)
 - [Function calling](https://developers.openai.com/api/docs/guides/function-calling)
-- [Remote MCP](https://developers.openai.com/api/docs/guides/tools-remote-mcp)
+- [Remote MCP](https://developers.openai.com/api/docs/guides/tools-connectors-mcp)
 - [Computer use](https://developers.openai.com/api/docs/guides/tools-computer-use)
 - [Image generation](https://developers.openai.com/api/docs/guides/tools-image-generation)
 - [Codex app-server](https://developers.openai.com/codex/app-server)

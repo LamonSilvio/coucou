@@ -50,7 +50,7 @@ Windows, with Node 22, Rust and Tauri prerequisites:
 cd windows
 npm ci
 npm run build
-node --test tests/agents.test.mjs
+node --test tests/*.test.mjs
 cargo test --workspace
 npm run tauri build -- --no-bundle
 ```
@@ -68,8 +68,23 @@ Configure keys in the app's secure Settings, authenticate with `codex login`, an
 5. Start an owned Codex session in a disposable project. Verify initialization, command/file/tool events, complete/error states and one-shot Allow/Deny. Test timeout, stopping/restarting, concurrent Claude approval, unknown client request and wrong session scope. Verify no terminal button for Codex.
 6. Verify original Mochi interactions, sounds/animations, integration pills and OS context permissions. Windows does not gain a window-capture feature in this branch.
 
-Computer use, remote Responses MCP, image generation, persistent file search and external write tools remain unavailable; a successful build must not label them implemented. The draft PR therefore does not satisfy the entire requested Definition of Done.
+7. With Computer Use enabled, a disposable browser profile and no sensitive display content, verify native OS permission denial, each input approval, screenshot-transmission Deny/Allow, timeout and Cancel. No payments, real credentials, production changes or irreversible tasks are appropriate for this acceptance test.
+8. Configure a trusted MCP test server and token in secure Settings. Verify discovery-only empty allowlist, permitted tool approval/denial, authentication errors and reconnect after configuration changes. Verify no old approval is replayed on another turn.
+9. Enable image generation, generate a synthetic image, edit a dropped image, verify Vision still handles analysis-only prompts, then preview/save/cancel export through the native dialog. These API requests can incur charges.
+10. Use sandbox/test integrations and disposable content for external writes. Inspect destination/parameters/risk, Deny and timeout before testing Allow. Do not perform real refunds, email delivery, production deployment or irreversible operations merely to validate this branch.
 
-## Latest candidate
+Computer Use, remote Responses MCP, image generation/editing and registered external writes now have production code and mock coverage. Persistent file search is still outside this branch. Live and physical acceptance remain unexecuted, so the full end-to-end Definition of Done is not asserted.
 
-Final code revision: `dff517898532c099f1cb845383e2d94afea36342` (local equivalent `47a250edcb8fac4fbc68a8ef6f9a1b31b2b7b624`). [Run 36781112805](https://github.com/LamonSilvio/coucou/actions/runs/36781112805) passed all four baseline/candidate macOS/Windows jobs, including the checked-in and regenerated macOS projects, App Store build, XCTest, Windows frontend/native build and all 51 tests. [Original release workflow run 36781119078](https://github.com/LamonSilvio/coucou/actions/runs/36781119078) also passed. The subsequent documentation commit does not modify application code. Main was verified unchanged at the baseline SHA; no merge or binary release was performed.
+## Previous implementation checkpoint
+
+Revision `dff517898532c099f1cb845383e2d94afea36342` passed [run 36781112805](https://github.com/LamonSilvio/coucou/actions/runs/36781112805), all baseline/candidate builds and 51 tests. This is historical evidence for the initial multi-provider implementation, not validation of the tools subsequently added.
+
+## Tools completion validation
+
+The new suites cover FIFO authorization, SAFE/CONFIRM/CRITICAL, Allow/Deny, expiry/cancel, duplicate execution claims, forged risk, redaction, shared Claude/Codex presentation, current computer action parsing, injected execution and safety ordering, mocked Responses computer continuations, MCP discovery/authentication/approval/one-shot grant consumption, strict configuration rejection, secure credential round trips, image requests/edit intent/PNG parsing/chosen save, all seven integration write request plans and approved mock transports. Search/interpreter, provider switch, file/vision context and previous agent contracts remain tested. Windows additionally boots the fixed PowerShell driver with `wait` without any desktop input/capture.
+
+An initial Windows native bootstrap test exceeded the 15-second limit. The driver now accepts newline-framed JSON and allows bounded 45-second cold startup. The failed run is retained as [36793819347](https://github.com/LamonSilvio/coucou/actions/runs/36793819347), not concealed or counted as a pass.
+
+Live tests: **NOT EXECUTED — credentials required**, plus explicit authorization for API costs/external effects. Physical mouse/keyboard/screenshot and save-dialog acceptance require interactive macOS/Windows machines and OS permissions not available in this editing runtime. Mock tests and native builds do not replace those checks. No live email, financial operation, production deployment, remote cancellation or irreversible change was performed. App Store native Computer Use and Codex launch are explicitly unavailable; the app target still builds.
+
+Final application code: `447d653457bd563c5534ce1de64c2a46063737fa` (local equivalent `32e369e`). [Native run 36794605129](https://github.com/LamonSilvio/coucou/actions/runs/36794605129) passed both candidate jobs: checked-in and regenerated macOS Debug app, App Store target, XCTest, Windows frontend and Tauri native production build. Suite counts, each counted once: **55 Swift + 50 Rust (47 app, 3 hook) + 21 TypeScript + 3 Python = 129 passed, 0 failed, 0 skipped**. The harmless Windows driver bootstrap passed. No physical browser input or capture test was performed. Subsequent changes are documentation only. Main remains at the original baseline; no merge or binary release is performed.

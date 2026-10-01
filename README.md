@@ -31,7 +31,7 @@ Meet **Mochi**: a soft little squircle with big eyes that pops out of your notch
 
 ## Features
 
-This fork adds **OpenAI Responses chat** and optional **Codex app-server sessions** alongside the existing Claude support. Settings select Anthropic, OpenAI or Auto and keep API keys separately in OS secure storage. See [OpenAI setup and limitations](docs/OPENAI.md), [architecture](docs/ARCHITECTURE.md), [security review](docs/SECURITY.md) and [validation status](docs/VALIDATION.md). Computer use is disabled; credentialed API and desktop approval testing is still required before treating this development branch as release-ready.
+This fork adds **OpenAI Responses chat** and optional **Codex app-server sessions** alongside the existing Claude support. Settings select Anthropic, OpenAI or Auto and keep API keys separately in OS secure storage. Optional additions include image generation/editing with chosen export, remote MCP discovery/calls, approved integration writes, and restricted browser Computer Use (**OFF by default**). Effects share a queued SAFE/CONFIRM/CRITICAL approval pipeline. See [OpenAI setup](docs/OPENAI.md), [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), [Computer Use](docs/COMPUTER_USE.md), [MCP](docs/MCP.md), [write tools](docs/TOOLS.md) and [verified validation](docs/VALIDATION.md). Credentialed API and physical desktop acceptance tests remain required; mocks and builds are not live success claims.
 
 - 🤖 **Claude Code, live** — see every session in your notch: what it reads, edits and runs, step by step. Finished? Mochi does a happy little jump.
 - ✅ **Approve from the notch** — Claude Code permission requests show up with **Allow / Deny**. One click, back to work.

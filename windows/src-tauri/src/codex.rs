@@ -205,6 +205,27 @@ fn can_approve(method: &str, thread: Option<&str>, turn: Option<&str>, params: &
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]fn native_jsonl_pipe_roundtrip() {
+        // Fixed fake peer: no model commands, network, authentication or file writes.
+        let binary=std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        let script=r#"[Console]::InputEncoding=[Text.Encoding]::UTF8; [Console]::OutputEncoding=[Text.Encoding]::UTF8; for($i=0;$i -lt 2;$i++){ $line=[Console]::In.ReadLine(); $request=$line | ConvertFrom-Json; $result=@{id=$request.id;result=@{received=$request}}; [Console]::Out.WriteLine(($result | ConvertTo-Json -Depth 12 -Compress)) }"#;
+        let mut child=Command::new(binary).args(["-NoProfile","-NonInteractive","-Command",script]).creation_flags(0x08000000).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
+        let stdout=child.stdout.take().unwrap();let stdin=child.stdin.take().unwrap();
+        let mut session=Session{child,stdin,generation:1,cwd:"C:/synthetic".into(),prompt:String::new(),ready:false,thread:None,turn:None,approvals:HashMap::new(),proposals:HashMap::new(),seen_approval_ids:HashSet::new()};
+        let (tx,rx)=std::sync::mpsc::channel();
+        std::thread::spawn(move||{for line in BufReader::new(stdout).lines().take(2){if let Ok(line)=line {let _=tx.send(serde_json::from_str::<Value>(&line));}}});
+        let request=json!({"id":41,"method":"thread/start","params":thread_parameters("C:/synthetic")});
+        let result=(||->Result<(),String>{
+            send(&mut session,request.clone())?;
+            let reply=rx.recv_timeout(std::time::Duration::from_secs(20)).map_err(|_|"Fixture timeout")?.map_err(|_|"Invalid fixture reply")?;
+            if reply["result"]["received"]!=request{return Err("JSONL thread request changed in transport".into())}
+            let approval=json!({"id":"quoted-id","result":{"decision":decision(false),"detail":"synthetic\nUnicode: café"}});
+            send(&mut session,approval.clone())?;
+            let reply=rx.recv_timeout(std::time::Duration::from_secs(20)).map_err(|_|"Fixture timeout")?.map_err(|_|"Invalid fixture reply")?;
+            if reply["result"]["received"]!=approval{return Err("JSONL decision changed in transport".into())}Ok(())
+        })();
+        let _=session.child.kill();let _=session.child.wait();assert!(result.is_ok(),"{result:?}");
+    }
     #[test]fn official_thread_policy(){assert_eq!(thread_parameters("C:/test")["approvalPolicy"],"unlessTrusted");assert_eq!(thread_parameters("C:/test")["sandbox"],"readOnly");}
     #[test]fn stale_turn_events_rejected(){assert!(!accepts_event(Some("thread"),Some("current"),&json!({"threadId":"thread","turn":{"id":"old"}})));assert!(accepts_event(Some("thread"),Some("current"),&json!({"threadId":"thread","turnId":"current"})));}
     #[test]fn restarted_session_cannot_consume_old_allow(){let mut pending=HashMap::from([("same-id".into(),json!(7))]);assert!(take_scoped_approval(&mut pending,2,1,"same-id").is_err());assert_eq!(take_scoped_approval(&mut pending,2,2,"same-id").unwrap(),json!(7));assert!(take_scoped_approval(&mut pending,2,2,"same-id").is_err());}
